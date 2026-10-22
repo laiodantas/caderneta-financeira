@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import type { Transaction, TransactionStatus } from '../types'
 import { CATEGORIES } from '../config/categories'
 import { useFinance } from '../context/FinanceContext'
-import { formatBRL, formatDateBR } from '../lib/format'
+import { formatBRL, formatDateBR, formatNumber, parseAmountInput } from '../lib/format'
 import { Modal } from './ui'
 
 const STATUS_OPTIONS: { value: TransactionStatus | ''; label: string }[] = [
@@ -25,28 +25,50 @@ export function TransactionModal({
   onClose: () => void
 }) {
   const { updateTransaction, addRule } = useFinance()
+  const [date, setDate] = useState(tx.date)
+  const [amountStr, setAmountStr] = useState(formatNumber(tx.amount))
   const [category, setCategory] = useState(tx.category)
   const [status, setStatus] = useState<TransactionStatus | ''>(tx.status ?? '')
   const [note, setNote] = useState(tx.note ?? '')
   const [tags, setTags] = useState((tx.tags ?? []).join(', '))
   const [learn, setLearn] = useState(true)
+  const [formError, setFormError] = useState('')
 
   useEffect(() => {
+    setDate(tx.date)
+    setAmountStr(formatNumber(tx.amount))
     setCategory(tx.category)
     setStatus(tx.status ?? '')
     setNote(tx.note ?? '')
     setTags((tx.tags ?? []).join(', '))
     setLearn(true)
+    setFormError('')
   }, [tx])
 
   const save = () => {
+    if (!date) {
+      setFormError('Informe a data do lançamento.')
+      return
+    }
+    const amount = parseAmountInput(amountStr)
+    if (amount == null || amount <= 0) {
+      setFormError('Informe um valor maior que zero.')
+      return
+    }
+
     const tagList = tags
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean)
 
+    setFormError('')
+    const changedCategory = category !== tx.category
     updateTransaction(tx.id, {
+      date,
+      amount,
       category,
+      // Escolha manual de categoria fica protegida contra a recategorização.
+      ...(changedCategory ? { categorySource: 'manual' as const } : {}),
       status: (status || undefined) as TransactionStatus | undefined,
       note: note || undefined,
       tags: tagList,
@@ -70,6 +92,28 @@ export function TransactionModal({
           <span className="tx-amount">{formatBRL(tx.amount)}</span>
         </div>
       </div>
+
+      <label className="field">
+        <span className="field-label">Data</span>
+        <input
+          className="input"
+          type="date"
+          required
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </label>
+
+      <label className="field">
+        <span className="field-label">Valor</span>
+        <input
+          className="input"
+          inputMode="decimal"
+          value={amountStr}
+          onChange={(e) => setAmountStr(e.target.value)}
+          placeholder="0,00"
+        />
+      </label>
 
       <label className="field">
         <span className="field-label">Categoria</span>
@@ -107,6 +151,8 @@ export function TransactionModal({
         <input type="checkbox" checked={learn} onChange={(e) => setLearn(e.target.checked)} />
         <span>Aprender esta regra e aplicar em transações futuras parecidas</span>
       </label>
+
+      {formError && <div className="error-box">{formError}</div>}
 
       <div className="modal-actions">
         <button className="btn btn-ghost" onClick={onClose}>

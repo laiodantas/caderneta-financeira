@@ -5,6 +5,7 @@
 // ============================================================================
 
 import type { Statement, Transaction, LearnedRule, BudgetMap } from '../types'
+import { normalizeBudgetMap } from './budget'
 
 const KEYS = {
   version: 'caderneta:version',
@@ -60,7 +61,8 @@ export function saveRules(items: LearnedRule[]): void {
 }
 
 export function loadBudgets(): BudgetMap {
-  return read<BudgetMap>(KEYS.budgets, {})
+  // Migra automaticamente o formato antigo ({ transporte: 500 }).
+  return normalizeBudgetMap(read<unknown>(KEYS.budgets, {}))
 }
 
 export function saveBudgets(items: BudgetMap): void {

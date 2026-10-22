@@ -6,12 +6,24 @@
 // - `name`    : nome exibido.
 // - `color`   : cor usada nos gráficos e marcadores (hex).
 // - `keywords`: termos em minúsculo E sem acento. A descrição é normalizada
-//               (sem acento, minúscula) antes de comparar, então escreva
-//               "transporte" e não "Transporte".
-// - `budget`  : orçamento mensal padrão (opcional).
+//               (sem acento, minúscula) antes de comparar.
+// - `budget`  : orçamento mensal padrão (opcional). O usuário pode definir um
+//               valor próprio para o mês na página Categorias.
+//
+// Como a classificação funciona:
+// - A palavra-chave MAIS ESPECÍFICA vence (a mais longa), não a primeira da
+//   lista. Assim "amazon prime" vence "amazon" e "mercado livre" vence
+//   "mercado".
+// - Termos curtos ou ambíguos devem terminar com um espaço para exigir
+//   palavra inteira: "bar " não casa com "barbearia", mas casa com "bar".
+// - Evite termos genéricos como "loja", "compra", "plano", "show" e "super":
+//   eles capturam estabelecimentos que não têm nada a ver com a categoria.
+// - Variações com e sem acento ("farmacia"/"farmácia") podem ser mantidas por
+//   legibilidade: a compilação abaixo remove as duplicatas automaticamente.
 // ============================================================================
 
 import type { Category } from '../types'
+import { normalizeForMatch } from '../lib/normalize'
 
 export const CATEGORIES: Category[] = [
   {
@@ -19,11 +31,13 @@ export const CATEGORIES: Category[] = [
     name: 'Transporte',
     color: '#6C8AA8',
     keywords: [
-      'uber', '99app', '99 app', '99 taxi', 'táxi', 'taxi', 'metrô', 'metro',
-      '99pop', 'ônibus', 'onibus', 'combustível', 'combustivel', 'gasolina', 'etanol',
-      'diesel', 'posto', 'pedágio', 'pedagio', 'estacionamento', 'parking',
-      'shell', 'ipiranga', 'br mania', 'blablacar', 'moovit', 'estapar',
-      'zona azul', 'recarga bilhete', 'bilhete unico', 'top',
+      'uber', 'uber trip', '99 ', '99app', '99 app', '99 taxi', '99pop', 'taxi ',
+      'táxi ', 'metro ', 'metrô ', 'ônibus', 'onibus', 'combustível',
+      'combustivel', 'gasolina', 'etanol', 'diesel', 'posto ', 'pedágio',
+      'pedagio', 'sem parar', 'veloe', 'conectcar', 'taggy', 'estacionamento',
+      'parking', 'shell', 'ipiranga', 'br mania', 'blablacar', 'moovit',
+      'estapar', 'zona azul', 'recarga bilhete', 'bilhete unico', 'buser',
+      'flit', 'cabify', 'indriver',
     ],
     budget: 500,
   },
@@ -32,13 +46,16 @@ export const CATEGORIES: Category[] = [
     name: 'Restaurantes e delivery',
     color: '#C74F3E',
     keywords: [
-      'ifood', 'ifd', 'uber eats', 'restaurante', 'lanchonete', 'lanches',
-      'padaria', 'panificadora', 'pizzaria', 'sushi', 'hamburgueria',
-      'mcdonalds', 'mcdonald', 'burger king', 'burgerking', 'subway',
-      'dominos', 'kfc', 'giraffas', 'habib', 'spoleto', 'comida',
-      'refeição', 'refeicao', 'cantina', 'self service', 'cafeteria',
-      'starbucks', 'café', 'cafe', 'açaí', 'acai', 'sorvete', 'sorveteria',
-      'gelateria', 'pastelaria', 'churrascaria', 'food', 'kitchen', 'delivery',
+      'ifood', 'ifd ', '99food', 'uber eats', 'rappi', 'aiqfome',
+      'restaurante', 'lanchonete', 'lanches', 'padaria', 'panificadora',
+      'pizzaria', 'pizza', 'sushi', 'hamburgueria', 'hamburguer', 'burger',
+      'mcdonalds', 'mcdonald', 'burger king', 'burgerking', 'bk ', 'subway',
+      'dominos', 'kfc', 'giraffas', 'habib', 'spoleto', 'outback', 'madero',
+      'coco bambu', 'bobs', 'bob s', 'comida', 'refeição', 'refeicao', 'cantina',
+      'confeitaria', 'salgado', 'salgados',
+      'self service', 'cafeteria', 'starbucks', 'café', 'cafe', 'açaí', 'acai',
+      'sorvete', 'sorveteria', 'gelateria', 'pastelaria', 'pastel',
+      'churrascaria', 'food', 'kitchen', 'delivery', 'padoca',
     ],
     budget: 600,
   },
@@ -47,27 +64,34 @@ export const CATEGORIES: Category[] = [
     name: 'Bares e lazer',
     color: '#C99B3F',
     keywords: [
-      'bar ', 'boteco', 'balada', 'boate', 'cinema', 'show', 'evento',
-      'ingresso', 'teatro', 'parque', 'fliperama', 'boliche', 'sinuca',
-      'bilheteria', 'ticketmaster', 'sympla', 'ingresso.com', 'festa',
-      'chopp', 'cerveja', 'pub ', 'casa noturna', 'casa de show', 'net cine',
-      'cine', 'cinepolis', 'cinemark', 'uol host', 'spotify live', 'rock',
+      'bar ', 'bares ', 'boteco', 'balada', 'boate', 'cinema', 'cinemark',
+      'cinepolis', 'cinépolis', 'teatro', 'show ', 'shows ', 'casa de show',
+      'festival', 'ingresso', 'bilheteria', 'ticketmaster', 'sympla', 'evento',
+      'festa', 'chopp', 'cerveja', 'cervejaria', 'pub ', 'casa noturna',
+      'fliperama', 'boliche', 'sinuca', 'parque ', 'hopi hari', 'playcenter',
+      'beto carrero', 'museu', 'steam', 'playstation', 'xbox', 'nintendo',
+      'playstation store', 'nintendo eshop', 'rock in rio', 'lollapalooza',
+      'the town',
     ],
     budget: 300,
   },
   {
-    // Fica ANTES de "mercado" para que "Mercado Livre" caia em compras
-    // (a palavra "mercado" sozinha não pode capturar marketplace/loja online).
+    // Fica antes de "mercado" e "transferencias" por clareza; a decisão real
+    // é feita pelo tamanho da palavra-chave ("mercado livre" vence "mercado").
     id: 'compras',
     name: 'Compras online e lojas',
-    color: '#B5654A',
+    // Tom ameixa: não se confunde com o coral de alerta nem com Restaurantes.
+    color: '#8E6B8A',
     keywords: [
-      'mercado livre', 'mercadolivre', 'amazon', 'shopee', 'shein', 'aliexpress',
-      'magalu', 'magazine luiza', 'americanas', 'casas bahia', 'renner', 'c&a',
-      'cea ', 'riachuelo', 'zara', 'havan', 'netshoes', 'dafiti', 'paypal',
-      'loja', 'compra', 'ecommerce', 'kalunga', 'centauro', 'decathlon',
-      'leroy merlin', 'tok stok', 'mobly', 'madeira', 'oboticario', 'boticário',
-      'livraria', 'saraiva', 'cultura ',
+      'mercado livre', 'mercadolivre', 'compra internacional',
+      'compra no exterior', 'amazon', 'shopee', 'shein',
+      'aliexpress', 'temu ', 'magalu', 'magazine luiza', 'americanas',
+      'casas bahia', 'renner', 'cea ', 'riachuelo', 'zara ', 'havan ',
+      'netshoes', 'dafiti', 'paypal', 'ecommerce', 'kalunga', 'centauro',
+      'decathlon', 'leroy merlin', 'tok stok', 'mobly', 'madeira madeira',
+      'oboticario', 'boticario', 'natura ', 'avon ', 'eudora', 'sephora',
+      'ri happy', 'rihappy', 'pbkids', 'saraiva', 'livraria', 'cultura ',
+      'shopping',
     ],
     budget: 500,
   },
@@ -76,12 +100,15 @@ export const CATEGORIES: Category[] = [
     name: 'Mercado e supermercado',
     color: '#7D9B76',
     keywords: [
-      'mercado', 'supermercado', 'atacadão', 'atacadao', 'assai', 'atacadista',
-      'hortifruti', 'hortifrúti', 'pao de acucar', 'pão de açúcar', 'carrefour',
-      'extra ', 'gpa', 'dia ', 'dia%', 'covabra', 'sonda', 'oba ', 'emporio',
-      'empório', 'quitanda', 'açougue', 'acougue', 'sacolao', 'sacolão',
-      'big ', 'walmart', 'atacarejo', 'muffato', 'condor', 'bh ', 'veran',
-      'super',
+      'mercado', 'supermercado', 'hipermercado', 'atacadão', 'atacadao',
+      'assai', 'assaí', 'atacadista', 'hortifruti', 'hortifrúti',
+      'pao de acucar', 'pão de açúcar', 'carrefour', 'gpa ', 'dia brasil',
+      'covabra', 'sonda ', 'emporio', 'empório', 'quitanda',
+      'açougue', 'acougue', 'sacolao', 'sacolão', 'walmart', 'atacarejo',
+      'muffato', 'veran ', 'mambo ', 'oxxo', 'sams club', 'mercadinho',
+      'mercearia', 'minimercado', 'mini mercado',
+      'sam s club', 'makro', 'roldao', 'zaffari', 'conveniencia',
+      'conveniência',
     ],
     budget: 1200,
   },
@@ -92,7 +119,8 @@ export const CATEGORIES: Category[] = [
     keywords: [
       'pix enviado', 'pix enviada', 'envio pix', 'pix transferido',
       'pix pago', 'pagamento pix', 'pix efetuado', 'transferencia pix enviada',
-      'pix - envio', 'enviado via pix',
+      'pix - envio', 'enviado via pix', 'pix cred', 'pix no credito',
+      'pix parcelado', 'pix cred parcelado',
     ],
   },
   {
@@ -109,11 +137,16 @@ export const CATEGORIES: Category[] = [
     id: 'transferencias',
     name: 'Transferências',
     color: '#8A9B6E',
+    // Decisão: carteiras digitais (Mercado Pago, PicPay, PagBank…) ficam aqui,
+    // porque a linha do extrato é uma movimentação para a carteira. Adquirentes
+    // de cartão (Stone, Cielo, Getnet) NÃO entram: a marca sozinha não indica
+    // transferência e, quando é compra, a descrição traz o estabelecimento.
     keywords: [
-      'ted', 'doc ', 'transferência', 'transferencia', 'ted enviado',
-      'doc enviado', 'transferência enviada', 'transferencia enviada',
-      'ted recebido', 'doc recebido', 'transferência recebida',
-      'transferencia recebida', 'transferencia pix', 'transferência pix',
+      'ted ', 'doc ', 'transferência', 'transferencia', 'ted enviado',
+      'doc enviado', 'ted recebido', 'doc recebido', 'transferencia pix',
+      'transferência pix', 'mercado pago', 'pagseguro', 'pagbank', 'picpay',
+      'infinitepay', 'pagamento da fatura',
+      'pagamento de fatura', 'pagamento fatura',
     ],
   },
   {
@@ -121,13 +154,16 @@ export const CATEGORIES: Category[] = [
     name: 'Assinaturas e streaming',
     color: '#9C8F5F',
     keywords: [
-      'netflix', 'spotify', 'deezer', 'disney', 'prime video', 'amazon prime',
-      'hbo', 'globoplay', 'paramount', 'youtube premium', 'youtube music',
-      'google one', 'icloud', 'dropbox', 'adobe', 'canva', 'linkedin premium',
-      'duolingo', 'assinatura', 'mensalidade', 'plano', 'app store',
-      'google play', 'apple.com/bill', 'microsoft', 'office 365', 'xbox',
-      'playstation plus', 'ps plus', 'game pass', 'crunchyroll', 'twitch',
-      'okeo',
+      'netflix', 'spotify', 'deezer', 'tidal', 'disney', 'disney plus',
+      'star plus', 'prime video', 'amazon prime', 'hbo', 'hbo max',
+      'globoplay', 'paramount', 'youtube premium', 'youtube music',
+      'yt premium', 'google one', 'icloud', 'apple music', 'apple tv',
+      'apple com bill', 'dropbox', 'adobe', 'canva', 'linkedin premium',
+      'duolingo', 'assinatura', 'app store', 'google play', 'office 365',
+      'microsoft 365', 'xbox game pass', 'game pass', 'gamepass',
+      'playstation plus', 'ps plus', 'psplus', 'nintendo switch online',
+      'crunchyroll', 'twitch', 'discord nitro', 'chatgpt plus', 'claude pro',
+      'perplexity pro', 'kindle unlimited', 'audible', 'okeo',
     ],
     budget: 150,
   },
@@ -136,9 +172,12 @@ export const CATEGORIES: Category[] = [
     name: 'Educação e cursos',
     color: '#5B7FA6',
     keywords: [
-      'ead ', 'unp ', 'curso', 'cursos', 'cursinho', 'faculdade', 'universidade',
-      'escola', 'colégio', 'colegio', 'express plan', 'plataforma de estudo',
-      'matrícula', 'matricula', 'mensalidade escolar', 'certificado',
+      'ead ', 'unp ', 'curso ', 'cursinho', 'faculdade',
+      'universidade', 'escola', 'colégio', 'colegio', 'express plan',
+      'plataforma de estudo', 'matrícula', 'matricula', 'mensalidade escolar',
+      'certificado', 'alura', 'udemy', 'coursera', 'hotmart', 'rocketseat',
+      'origamid', 'senac', 'senai', 'sebrae', 'kumon', 'wizard', 'fisk',
+      'ccaa', 'cna ', 'microlins', 'prepara ', 'enem ', 'vestibular', 'apostila',
     ],
     budget: 400,
   },
@@ -147,9 +186,14 @@ export const CATEGORIES: Category[] = [
     name: 'Serviços online e cloud',
     color: '#7A6FA8',
     keywords: [
-      'digitalocean', 'aws', 'amazon web services', 'azure', 'google cloud',
-      'vps', 'hosting', 'servidor', 'cloud', 'github', 'vercel', 'netlify',
-      'notion', 'openai', 'chatgpt', 'anthropic',
+      'digitalocean', 'aws ', 'amazon web services', 'azure', 'google cloud',
+      'vps', 'hosting', 'servidor', 'cloud', 'github', 'github copilot',
+      'vercel', 'netlify', 'railway', 'render ', 'fly io', 'supabase',
+      'firebase', 'cloudflare', 'namecheap', 'godaddy', 'hostinger',
+      'kinghost', 'locaweb', 'uol host', 'registro br', 'npm', 'docker',
+      'jetbrains',
+      'notion', 'linear ', 'slack', 'zoom ', 'openai', 'chatgpt', 'anthropic',
+      'claude ai', 'gemini', 'perplexity', 'cursor ', 'figma',
     ],
     budget: 200,
   },
@@ -158,13 +202,19 @@ export const CATEGORIES: Category[] = [
     name: 'Saúde e farmácia',
     color: '#D98A8A',
     keywords: [
-      'farmácia', 'farmacia', 'drogaria', 'drogasil', 'pacheco', 'raia',
-      'pague menos', 'sp drogas', 'são paulo', 'droga', 'consulta', 'médico',
-      'medico', 'dentista', 'psicologo', 'psicólogo', 'plano de saúde',
-      'plano de saude', 'clinica', 'clínica', 'hospital', 'laboratorio',
-      'laboratório', 'exame', 'odontologia', 'fisioterapia', 'academia',
-      'smartfit', 'gym', 'farma', 'veterinário', 'veterinario', 'petlove',
-      'petz', 'ótica', 'otica', 'óculos', 'oculos', 'lentes',
+      'farmácia', 'farmacia', 'drogaria', 'drogasil', 'raia ',
+      'pague menos', 'sp drogas', 'droga raia', 'consulta medica', 'consultorio', 'médico', 'medico',
+      'dentista', 'psicologo', 'psicólogo', 'plano de saúde', 'plano de saude',
+      'clinica', 'clínica', 'hospital', 'laboratorio', 'laboratório', 'exame',
+      'odontologia', 'fisioterapia', 'academia', 'smartfit', 'smart fit', 'gym',
+      'farma', 'veterinário', 'veterinario', 'petlove', 'petz', 'cobasi',
+      'pet shop', 'petshop', 'ótica', 'otica', 'óculos', 'oculos', 'lentes',
+      'unimed', 'amil ', 'bradesco saude', 'sulamerica', 'hapvida',
+      'notredame', 'notre dame', 'intermedica', 'prevent senior', 'omint',
+      'cassi ', 'geap ', 'amil dental', 'odontoprev', 'dental', 'delboni',
+      'fleury', 'lavoisier', 'hermes pardini', 'sirio libanes', 'einstein',
+      'samaritano', 'dasa ', 'panvel', 'joao racho', 'nissei', 'extrafarma',
+      'ultrafarma',
     ],
     budget: 400,
   },
@@ -173,13 +223,15 @@ export const CATEGORIES: Category[] = [
     name: 'Contas fixas',
     color: '#1E2A4A',
     keywords: [
-      'aluguel', 'condominio', 'condomínio', 'luz', 'energia', 'enel', 'cpfl',
-      'cemig', 'eletropaulo', 'equatorial', 'água', 'agua', 'sabesp', 'sanepar',
-      'copasa', 'corsan', 'gás', 'gas natural', 'comgas', 'ultragaz', 'internet',
-      'vivo', 'claro', 'tim ', 'oi ', 'net ', 'operadora', 'telefone', 'celular',
-      'tv a cabo', 'iptu', 'conta de', 'fatura', 'boleto de', 'seguro de vida',
-      'plano de saúde', 'financiamento', 'prestação', 'prestacao', 'escola',
-      'faculdade', 'mensalidade escolar',
+      'aluguel', 'condominio', 'condomínio', 'luz ', 'energia', 'enel', 'cpfl',
+      'cemig', 'eletropaulo', 'equatorial', 'light ', 'rge ', 'ceee', 'sabesp',
+      'sanepar', 'copasa', 'corsan', 'embasa', 'cagece', 'agua ', 'água ',
+      'gas natural', 'gás natural', 'comgas', 'ultragaz', 'liquigas',
+      'consigaz', 'internet', 'banda larga', 'fibra', 'vivo ', 'claro ',
+      'tim ', 'oi ', 'nextel', 'algar', 'sercomtel', 'operadora', 'telefone',
+      'celular', 'tv a cabo', 'iptu', 'ipva', 'licenciamento', 'dpvat',
+      'financiamento', 'prestação', 'prestacao', 'seguro de vida',
+      'seguro ', 'seguro residencial', 'seguro auto', 'porto seguro',
     ],
     budget: 2500,
   },
@@ -188,9 +240,10 @@ export const CATEGORIES: Category[] = [
     name: 'Tarifas e taxas',
     color: '#C9A87C',
     keywords: [
-      'tarifa', 'taxa', 'anuidade', 'iof', 'juros', 'manutenção', 'manutencao',
+      'tarifa', 'taxa ', 'anuidade', 'iof ', 'juros ', 'manutenção', 'manutencao',
       'pacote de serviços', 'pacote de servicos', 'cesta de serviços',
-      'mensalidade banco', 'seguro', 'multa', 'encargo', 'juros de mora',
+      'cesta de servicos', 'mensalidade banco', 'multa ', 'encargo',
+      'juros de mora', 'spread', 'câmbio', 'cambio',
     ],
   },
   {
@@ -198,15 +251,28 @@ export const CATEGORIES: Category[] = [
     name: 'Saques',
     color: '#8B8B9A',
     keywords: [
-      'saque', 'caixa eletronico', 'caixa eletrônico', 'atm', 'banco24horas',
-      'banco 24 horas', 'saque 24h', 'caixa 24 horas',
+      'saque ', 'caixa eletronico', 'caixa eletrônico', 'atm ', 'banco24horas',
+      'banco 24 horas', 'saque 24h', 'caixa 24 horas', 'withdraw',
+    ],
+  },
+  {
+    // Entradas (salário, rendimentos, reembolsos). Não aparece na página
+    // Categorias, que mostra apenas gastos; aparece no Extrato e nos filtros.
+    id: 'renda',
+    name: 'Renda e entradas',
+    color: '#4E8A5E',
+    keywords: [
+      'salario', 'salário', '13o salario', 'decimo terceiro', 'pro labore',
+      'pró-labore', 'rendimento', 'rendimentos', 'dividendo', 'dividendos',
+      'freela', 'freelance', 'freelancer', 'reembolso', 'cashback', 'estorno',
+      'restituicao', 'restituição', 'premiacao', 'premiação',
     ],
   },
   {
     id: 'extras',
     name: 'Extras / Outros',
     color: '#9AA0A6',
-    // Categoria "coringa": recebe tudo que não casou com nenhuma acima.
+    // Categoria "coringa": recebe apenas o que não casou com nenhuma acima.
     keywords: [],
   },
 ]
@@ -215,6 +281,39 @@ export const CATEGORIES: Category[] = [
 export const CATEGORY_MAP: Record<string, Category> = Object.fromEntries(
   CATEGORIES.map((c) => [c.id, c]),
 )
+
+/** Palavra-chave já preparada para comparação (sem acento e em minúsculas). */
+export interface CompiledKeyword {
+  categoryId: string
+  keyword: string
+  /** Exige palavra inteira ("bar " na configuração original). */
+  wholeWord: boolean
+}
+
+/**
+ * Lista única de palavras-chave, já normalizada.
+ * Remove duplicatas da mesma categoria, como "farmácia" e "farmacia", que
+ * antes eram testadas duas vezes sem necessidade.
+ */
+export const CATEGORY_KEYWORDS: CompiledKeyword[] = (() => {
+  const seen = new Set<string>()
+  const out: CompiledKeyword[] = []
+
+  for (const category of CATEGORIES) {
+    for (const raw of category.keywords) {
+      const keyword = normalizeForMatch(raw)
+      if (!keyword) continue
+
+      const wholeWord = /\s$/.test(raw)
+      const dedupeKey = `${category.id}|${keyword}|${wholeWord}`
+      if (seen.has(dedupeKey)) continue
+      seen.add(dedupeKey)
+      out.push({ categoryId: category.id, keyword, wholeWord })
+    }
+  }
+
+  return out
+})()
 
 /** id da categoria usada como fallback. */
 export const DEFAULT_CATEGORY = 'extras'

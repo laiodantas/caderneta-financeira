@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { RawTransaction } from '../../types'
-import { parseMoneyToken } from './text'
+import { parseDateText, parseMoneyToken } from './text'
 
 const ENTRADA_KEYWORDS = ['pix recebido', 'credito', 'crédito', 'deposito', 'depósito', 'salario', 'salário', 'estorno', 'transferencia recebida', 'pagamento recebido', 'reembolso', 'rendimento', 'cashback']
 
@@ -91,17 +91,8 @@ export function parseCSV(text: string): RawTransaction[] {
       type = ENTRADA_KEYWORDS.some((k) => norm(desc).includes(k)) ? 'entrada' : 'saida'
     }
 
-    let date = ''
-    if (dateIdx >= 0 && row[dateIdx]) {
-      const m = row[dateIdx].match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/)
-      if (m) {
-        const day = m[1].padStart(2, '0')
-        const month = m[2].padStart(2, '0')
-        let year = m[3]
-        if (year.length === 2) year = '20' + year
-        date = `${year}-${month}-${day}`
-      }
-    }
+    const date =
+      dateIdx >= 0 && row[dateIdx] ? parseDateText(row[dateIdx]) ?? '' : ''
 
     result.push({ date, description: desc, amount: parsed.value, type })
   }

@@ -16,6 +16,9 @@
   --coral: #c74f3e;
   --coral-deep: #a63b2c;
   --coral-soft: #f6dfd9;
+  /* Alerta de orçamento: vermelho profundo, diferente do coral das categorias. */
+  --alert: #a32020;
+  --alert-soft: #f7dede;
   --green: #7d9b76;
   --muted: #6e7b8e;
   --muted-2: #8a94a3;
@@ -975,12 +978,50 @@ button {
   transition: width 400ms ease;
 }
 
+/* Estouro de orçamento: cor própria e listras, para não se confundir com a
+   cor da categoria (ex.: Restaurantes também é avermelhado). */
+.budget-fill.over {
+  background-color: var(--alert);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.22) 0,
+    rgba(255, 255, 255, 0.22) 4px,
+    transparent 4px,
+    transparent 9px
+  );
+}
+
 .budget-warn {
   display: block;
   margin-top: 6px;
   font-size: 0.75rem;
-  color: var(--coral);
-  font-weight: 600;
+  color: var(--alert);
+  font-weight: 700;
+}
+
+.budget-projection {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.budget-projection.is-over {
+  color: var(--alert);
+  font-weight: 700;
+}
+
+.budget-reset {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.category-card.is-empty {
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.category-card.is-empty .category-total-value {
+  color: var(--muted-2);
 }
 
 .budget-add {
@@ -1002,6 +1043,29 @@ button {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.budget-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-top-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.page-notice {
+  margin: -8px 0 18px;
+  font-size: 0.82rem;
+}
+
+.page-notice-result {
+  color: var(--coral-deep);
+  font-weight: 600;
 }
 
 /* Lista de estabelecimentos na categoria */
@@ -1038,6 +1102,67 @@ button {
 .merchant-value {
   font-weight: 700;
   color: var(--navy);
+}
+
+/* Fila de "sem categoria" */
+.uncategorized-note {
+  margin: -6px 0 14px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.uncategorized-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.uncategorized-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.uncategorized-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.uncategorized-name {
+  font-weight: 700;
+  color: var(--navy);
+  font-size: 0.92rem;
+}
+
+.uncategorized-meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.uncategorized-value {
+  font-weight: 800;
+  color: var(--navy);
+  font-size: 0.92rem;
+}
+
+.uncategorized-select {
+  min-width: 180px;
+  max-width: 100%;
+}
+
+.uncategorized-more {
+  margin-top: 12px;
 }
 
 /* ==========================================================================

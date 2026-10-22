@@ -20,6 +20,28 @@ export function formatNumber(value: number): string {
   }).format(Number.isFinite(value) ? value : 0)
 }
 
+/**
+ * Converte um valor digitado pelo usuário em número.
+ * Aceita "1.234,56", "1234,56", "1234.56" e "1.234".
+ */
+export function parseAmountInput(raw: string): number | null {
+  const s = raw.trim().replace(/R\$\s*/gi, '').replace(/\s/g, '')
+  if (!s) return null
+
+  if (s.includes(',')) {
+    const n = parseFloat(s.replace(/\./g, '').replace(',', '.'))
+    return Number.isFinite(n) ? n : null
+  }
+
+  // "1.234" / "1.234.567" são milhares no formato brasileiro.
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+    return parseFloat(s.replace(/\./g, ''))
+  }
+
+  const n = parseFloat(s)
+  return Number.isFinite(n) ? n : null
+}
+
 /** Converte `yyyy-mm-dd` em `dd/mm/aaaa`. */
 export function formatDateBR(iso: string): string {
   if (!iso) return '—'

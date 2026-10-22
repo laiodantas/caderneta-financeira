@@ -176,7 +176,8 @@ export async function parsePdf(
   const bank = detectBank(text)
 
   // Fatura de cartão: usa o parser de colunas (datas e valores exatos).
-  if (!ocrUsed && looksLikeFatura(pages)) {
+  const faturaLike = !ocrUsed && looksLikeFatura(pages)
+  if (faturaLike) {
     onProgress?.('Fatura de cartão reconhecida — reconstruindo colunas…')
     const { transactions, pending } = parseFatura(pages)
     if (transactions.length) {
@@ -184,6 +185,9 @@ export async function parsePdf(
     }
   }
 
-  const transactions = extractFromText(text)
+  // OCR não preserva colunas; se o texto ainda indicar fatura, ao menos
+  // tratamos valores negativos como créditos/pagamentos.
+  const ocrFatura = ocrUsed && /despesas da fatura|fatura atual/i.test(text)
+  const transactions = extractFromText(text, undefined, { isFatura: faturaLike || ocrFatura })
   return { transactions, bank, ocrUsed, pages: pages.length }
 }

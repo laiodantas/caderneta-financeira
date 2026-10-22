@@ -11,7 +11,7 @@ import { categorize, rawToTransaction } from '../lib/categorize'
 import { CATEGORIES } from '../config/categories'
 import { BANKS } from '../config/banks'
 import { statementLabelFrom } from '../lib/normalize'
-import { periodLabel, uid } from '../lib/format'
+import { parseAmountInput, periodLabel, uid } from '../lib/format'
 import { SectionTitle, Tag } from '../components/ui'
 import { NotebookIllustration } from '../components/Illustrations'
 import type { RawTransaction, Transaction, PendingInstallment } from '../types'
@@ -25,6 +25,14 @@ interface PreviewRow {
   category: string
   /** Texto usado na categorização (vem do parser). */
   categoryHint?: string
+  /** Estabelecimento já resolvido pelo parser. */
+  merchant?: string
+  /** Compra no crédito parcelada (ex.: "Pix no crédito"). */
+  creditInstallment?: boolean
+  /** Valor na moeda original, quando o banco informou a conversão. */
+  originalAmount?: number
+  /** Moeda original do lançamento (ex.: "USD"). */
+  originalCurrency?: string
   /** Parcela X de Y, quando a compra é parcelada. */
   installment?: { current: number; total: number }
 }
@@ -50,7 +58,8 @@ export function Importar() {
   const [pending, setPending] = useState<PendingInstallment[]>([])
   const [imported, setImported] = useState<string | null>(null)
 
-  const canImport = preview.length > 0
+  const missingDates = preview.filter((row) => !row.date).length
+  const canImport = preview.length > 0 && missingDates === 0
 
   async function handleFile(file: File) {
     setError(null)
@@ -67,8 +76,12 @@ export function Importar() {
         description: raw.description,
         amountStr: raw.amount.toFixed(2).replace('.', ','),
         type: raw.type,
-        category: categorize(raw.description, rules, raw.categoryHint),
+        category: categorize(raw.description, rules, raw.categoryHint, raw.type),
         categoryHint: raw.categoryHint,
+        merchant: raw.merchant,
+        creditInstallment: raw.creditInstallment,
+        originalAmount: raw.originalAmount,
+        originalCurrency: raw.originalCurrency,
         installment: raw.installment,
       }))
       const detectedPeriod = detectPeriod(res.transactions)
@@ -95,10 +108,17 @@ export function Importar() {
   }
 
   function confirmImport() {
+    if (!preview.length) return
+    if (preview.some((row) => !row.date)) {
+      setError('Preencha a data de todos os lançamentos antes de confirmar a importação.')
+      return
+    }
+
+    setError(null)
     const txs: Transaction[] = []
     for (const row of preview) {
-      const amount = parseFloat(row.amountStr.replace(/\./g, '').replace(',', '.'))
-      if (!Number.isFinite(amount) || amount <= 0) continue
+      const amount = parseAmountInput(row.amountStr)
+      if (amount == null || amount <= 0) continue
       if (!row.description.trim()) continue
       const tx = rawToTransaction(
         {
@@ -106,14 +126,22 @@ export function Importar() {
           description: row.description,
           amount,
           type: row.type,
+          merchant: row.merchant,
           categoryHint: row.categoryHint,
+          creditInstallment: row.creditInstallment,
+          originalAmount: row.originalAmount,
+          originalCurrency: row.originalCurrency,
           installment: row.installment,
         },
         '',
         bank,
         rules,
       )
-      tx.category = row.category // respeita a escolha do usuário na pré-visualização
+      // Respeita a escolha do usuário na pré-visualização e a protege da recategorização.
+      if (row.category !== tx.category) {
+        tx.category = row.category
+        tx.categorySource = 'manual'
+      }
       txs.push(tx)
     }
 
@@ -211,7 +239,7 @@ export function Importar() {
       )}
 
       {/* Pré-visualização */}
-      {canImport && !busy && (
+      {preview.length > 0 && !busy && (
         <div className="preview">
           <div className="card meta-card">
             <div className="meta-grid">
@@ -249,6 +277,14 @@ export function Importar() {
             </div>
           </div>
 
+          {missingDates > 0 && (
+            <div className="error-box" role="alert">
+              <strong>Faltam datas.</strong> {missingDates} lançamento
+              {missingDates > 1 ? 's estão' : ' está'} sem data. Preencha a coluna Data
+              na tabela abaixo para poder importar.
+            </div>
+          )}
+
           <SectionTitle>Revise antes de confirmar</SectionTitle>
           <div className="card table-card">
             <div className="table-scroll">
@@ -270,6 +306,8 @@ export function Importar() {
                         <input
                           className="input input-sm"
                           type="date"
+                          required
+                          aria-invalid={!row.date}
                           value={row.date}
                           onChange={(e) => updateRow(i, { date: e.target.value })}
                         />
@@ -333,7 +371,7 @@ export function Importar() {
             <button className="btn btn-ghost" onClick={reset}>
               Descartar
             </button>
-            <button className="btn btn-primary" onClick={confirmImport}>
+            <button className="btn btn-primary" onClick={confirmImport} disabled={!canImport}>
               Confirmar importação ({preview.length})
             </button>
           </div>

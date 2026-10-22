@@ -46,6 +46,11 @@ export interface Transaction {
   originalAmount?: number
   /** Moeda original do lançamento (ex.: "USD"). */
   originalCurrency?: string
+  /**
+   * De onde veio a categoria. "manual" = você escolheu; a recategorização
+   * automática nunca altera. Ausente = automática (regras da Caderneta).
+   */
+  categorySource?: 'auto' | 'manual'
 }
 
 /** Uma transação ainda crua, recém-extraída do arquivo (antes de revisar). */
@@ -112,5 +117,17 @@ export interface Category {
   budget?: number
 }
 
-/** Orçamentos definidos pelo usuário por categoria. */
-export type BudgetMap = Record<string, number>
+/**
+ * Orçamento de uma categoria.
+ * - `base`   : limite mensal padrão (vale para qualquer mês sem valor próprio).
+ * - `months` : valores específicos por mês (`yyyy-mm`), para quando o limite
+ *              muda de um mês para outro.
+ * Campos ausentes significam "usar o padrão da categoria".
+ */
+export interface CategoryBudget {
+  base?: number
+  months: Record<string, number>
+}
+
+/** Orçamentos definidos pelo usuário, por categoria. */
+export type BudgetMap = Record<string, CategoryBudget>

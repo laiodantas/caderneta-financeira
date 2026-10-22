@@ -7,50 +7,74 @@
 //   3. Categoria "Extras / Outros" como fallback.
 // ============================================================================
 
-import { CATEGORIES, DEFAULT_CATEGORY } from '../config/categories'
+import { CATEGORY_KEYWORDS, DEFAULT_CATEGORY } from '../config/categories'
 import { normalizeForMatch, normalizeDescription } from './normalize'
 import { uid } from './format'
-import type { LearnedRule, RawTransaction, Transaction } from '../types'
+import type { LearnedRule, RawTransaction, Transaction, TransactionType } from '../types'
+
+/** Escapa um texto para uso dentro de uma expressão regular. */
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 /** Aplica regras aprendidas; retorna o id da categoria ou null. */
 function matchLearned(descNormalized: string, rules: LearnedRule[]): string | null {
   for (const rule of rules) {
-    if (!rule.pattern) continue
-    // Regras são armazenadas como substring normalizada.
-    if (descNormalized.includes(normalizeForMatch(rule.pattern))) {
+    const pattern = normalizeForMatch(rule.pattern)
+    if (!pattern) continue
+
+    // Regras curtas ("show", "loja") exigem palavra inteira, para não
+    // capturar "shopping" ou "lojista" por acidente.
+    if (!pattern.includes(' ') && pattern.length <= 4) {
+      const re = new RegExp(`(^|[^a-z0-9])${escapeRegex(pattern)}([^a-z0-9]|$)`)
+      if (re.test(descNormalized)) return rule.categoryId
+    } else if (descNormalized.includes(pattern)) {
       return rule.categoryId
     }
   }
   return null
 }
 
-/**
- * Expressão que casa a palavra-chave como palavra inteira.
- * (O marcador de espaço no final das palavras-chave é perdido na
- * normalização, então a fronteira é reconstruída aqui.)
- */
-function wordRegex(keyword: string): RegExp {
-  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(^|[^a-z0-9])${escaped}(s|es)?([^a-z0-9]|$)`)
+interface KeywordHit {
+  categoryId: string
+  /** Quanto maior, mais específica é a palavra-chave. */
+  score: number
 }
 
-/** Aplica palavras-chave; retorna o id da categoria ou null. */
-function matchKeywords(descNormalized: string): string | null {
-  for (const cat of CATEGORIES) {
-    if (!cat.keywords.length) continue
-    for (const kw of cat.keywords) {
-      const k = normalizeForMatch(kw)
-      if (!k) continue
-      // Palavra-chave escrita com espaço no final = fronteira de palavra
-      // (ex.: "oba " não pode casar com "global").
-      if (/\s$/.test(kw)) {
-        if (wordRegex(k).test(descNormalized)) return cat.id
-      } else if (descNormalized.includes(k)) {
-        return cat.id
-      }
+/**
+ * Casa a palavra-chave no texto. Quando ela termina com espaço na configuração,
+ * exige palavra inteira ("bar " não casa com "barbearia").
+ */
+function keywordMatches(text: string, keyword: string, wholeWord: boolean): boolean {
+  if (!wholeWord) return text.includes(keyword)
+  const escaped = escapeRegex(keyword).replace(/\s+/g, '\\s+')
+  return new RegExp(`(^|[^a-z0-9])${escaped}(s|es)?([^a-z0-9]|$)`).test(text)
+}
+
+/**
+ * Procura a palavra-chave mais específica do texto.
+ * A mais longa vence (expressões de duas palavras ganham prioridade), em vez
+ * de a primeira categoria da lista vencer. Isso evita que termos genéricos
+ * como "mercado" capturem "Mercado Livre" ou que "show" capture "shopping".
+ */
+function bestKeywordMatch(text: string): KeywordHit | null {
+  let best: KeywordHit | null = null
+
+  // Lista já normalizada e sem duplicatas de acento (ver config/categories.ts).
+  for (const { categoryId, keyword, wholeWord } of CATEGORY_KEYWORDS) {
+    if (!keywordMatches(text, keyword, wholeWord)) continue
+
+    // Expressões de duas palavras vencem; depois, a palavra mais longa.
+    // A fronteira de palavra só desempata levemente: "bar" não pode vencer
+    // "restaurante" em "O bar e restaurante".
+    const multiWord = keyword.includes(' ')
+    const score = keyword.length + (multiWord ? 20 : 0) + (wholeWord ? 2 : 0)
+    if (!best || score > best.score) {
+      best = { categoryId, score }
     }
   }
-  return null
+
+  return best
 }
 
 /**
@@ -63,17 +87,47 @@ export function categorize(
   description: string,
   rules: LearnedRule[] = [],
   hint?: string,
+  type?: TransactionType,
 ): string {
   const normalized = normalizeForMatch(description)
-  if (!normalized) return DEFAULT_CATEGORY
+  // A descrição e o nome canônico do estabelecimento são avaliados juntos;
+  // a melhor correspondência entre os dois vence.
+  const hintNormalized = normalizeForMatch(hint || normalizeDescription(description))
+  if (!normalized && !hintNormalized) return DEFAULT_CATEGORY
 
-  const learned = matchLearned(normalized, rules)
+  const learned = normalized ? matchLearned(normalized, rules) : null
   if (learned) return learned
 
-  const kw = matchKeywords(normalizeForMatch(hint || normalizeDescription(description)))
-  if (kw) return kw
+  let best: KeywordHit | null = null
+  for (const source of [normalized, hintNormalized]) {
+    if (!source) continue
+    const hit = bestKeywordMatch(source)
+    if (hit && (!best || hit.score > best.score)) best = hit
+  }
+  if (best) return best.categoryId
 
-  return DEFAULT_CATEGORY
+  // Sem palavra-chave: usa o tipo do lançamento para diferenciar PIX e
+  // transferências, em vez de mandar tudo para "Extras".
+  if (/(^|[^a-z0-9])pix([^a-z0-9]|$)/.test(normalized)) {
+    return type === 'entrada' ? 'pix_recebido' : 'pix_enviado'
+  }
+  if (/(^|[^a-z0-9])(ted|doc|transferencia)([^a-z0-9]|$)/.test(normalized)) {
+    return 'transferencias'
+  }
+
+  // Entrada sem nenhuma pista vai para "Renda", não para "Extras" (que é para gastos).
+  return type === 'entrada' ? 'renda' : DEFAULT_CATEGORY
+}
+
+/**
+ * Recalcula a categoria de um lançamento já salvo, usando as regras atuais.
+ * Usa o nome do estabelecimento (e não o texto cru) e preserva a identificação
+ * de "Pix no crédito", que depende de uma tag, não da descrição.
+ */
+export function categoryForSaved(tx: Transaction, rules: LearnedRule[]): string {
+  const pixCredit = tx.tags.includes('Pix no crédito')
+  const hint = pixCredit ? 'pix enviado no credito' : tx.merchant
+  return categorize(tx.description, rules, hint, tx.type)
 }
 
 /**
@@ -104,7 +158,7 @@ export function rawToTransaction(
   rules: LearnedRule[],
 ): Transaction {
   const merchant = raw.merchant ?? normalizeDescription(raw.description)
-  const category = categorize(raw.description, rules, raw.categoryHint)
+  const category = categorize(raw.description, rules, raw.categoryHint, raw.type)
 
   // Tags automáticas que ajudam a identificar o tipo de lançamento.
   const tags: string[] = []

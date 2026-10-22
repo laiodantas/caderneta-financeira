@@ -15,7 +15,7 @@
 // ============================================================================
 
 import type { RawTransaction, PendingInstallment } from '../../types'
-import { parseMoneyToken } from './text'
+import { parseDateText, parseMoneyToken } from './text'
 import { normalizeDescription } from '../normalize'
 
 // --- Estruturas -------------------------------------------------------------
@@ -38,27 +38,17 @@ export interface PdfPage {
   text: string
 }
 
-const MONTHS: Record<string, number> = {
-  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
-  jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
-}
-
-/** "03 de jul. 2026" → "2026-07-03". */
+/**
+ * Converte a data da fatura para ISO.
+ * Aceita "03 de jul. 2026", "03 JUL 2026", "03/07/2026" e "03/07".
+ */
 export function parseFaturaDate(text: string): string | null {
-  const m = text
-    .trim()
-    .match(/(\d{1,2})\s+de\s+([a-zç]{3,4})\.?(?:\s+de)?\s*(\d{4})/i)
-  if (!m) return null
-  const day = parseInt(m[1], 10)
-  const month = MONTHS[m[2].slice(0, 3).toLowerCase()]
-  const year = parseInt(m[3], 10)
-  if (!month || day < 1 || day > 31) return null
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  return parseDateText(text)
 }
 
 /** "(Parcela 03 de 04)" → { current: 3, total: 4 }. */
 export function parseInstallmentMarker(text: string): { current: number; total: number } | null {
-  const m = text.match(/\(?\s*parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s*\)?/i)
+  const m = text.match(/\bparcela\s*(\d{1,2})\s*(?:de|\/)\s*(\d{1,2})\b/i)
   if (!m) return null
   const current = parseInt(m[1], 10)
   const total = parseInt(m[2], 10)
@@ -114,6 +104,20 @@ export function looksLikeFatura(pages: PdfPage[]): boolean {
   })
 }
 
+/**
+ * Lê o primeiro valor monetário de uma célula. Alguns layouts juntam duas
+ * colunas de valor ("R$ 96,30" + "USD 17,14"); nesse caso vale o primeiro.
+ */
+function parseFirstMoney(text: string) {
+  const re = /(?:R\$\s*)?[-+]?\s*\(?\s*\d{1,3}(?:[.,]\d{3})*[.,]\d{2}\s*\)?(?:\s*[DC]\b)?/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const parsed = parseMoneyToken(m[0])
+    if (parsed) return parsed
+  }
+  return parseMoneyToken(text)
+}
+
 /** Divide os trechos de uma linha entre as colunas da tabela. */
 function splitByColumns(cells: PdfCell[], b: ColumnBounds) {
   const out = { data: '', mov: '', ben: '', valor: '' }
@@ -154,11 +158,11 @@ function finalize(draft: Draft | null): RawTransaction | null {
     .filter(
       (l) =>
         !/moeda de origem|d[óo]lar americano/i.test(l) &&
-        !/^\(?\s*parcela\s+\d+/i.test(l) &&
+        !/^\(?\s*parcela\s*\d+/i.test(l) &&
         !/principal\s*\(r\$|^\)?\s*\+\s*juros/i.test(l),
     )
     // Tira o marcador de parcela do texto ("... (Parcela 03 de 04)").
-    .map((l) => l.replace(/\(?\s*parcela\s+\d{1,2}\s+de\s+\d{1,2}\s*\)?/gi, ' '))
+    .map((l) => l.replace(/\(?\s*\bparcela\s*\d{1,2}\s*(?:de|\/)\s*\d{1,2}\s*\)?/gi, ' '))
 
   let movText = cleanLines.join(' ').replace(/\s+/g, ' ').trim()
   const ben = draft.ben && draft.ben !== '-' ? draft.ben.replace(/\s+/g, ' ').trim() : null
@@ -287,11 +291,18 @@ export function parseFatura(pages: PdfPage[]): {
         }
       }
 
-      if (cols.valor) {
-        const parsed = parseMoneyToken(cols.valor)
-        if (parsed) {
-          draft.amount = parsed.value
-          draft.negative = parsed.negative
+      // O primeiro valor da transação é o valor cobrado. Linhas de total,
+      // saldo ou continuação (ex.: valor em USD) não podem sobrescrevê-lo.
+      if (cols.valor && draft.amount == null) {
+        const summary =
+          /^(total|subtotal|saldo|limite|resumo)\b/i.test(cols.ben || '') ||
+          /^(total|subtotal|saldo|limite|resumo)\b/i.test(cols.mov || '')
+        if (!summary) {
+          const parsed = parseFirstMoney(cols.valor)
+          if (parsed) {
+            draft.amount = parsed.value
+            draft.negative = parsed.negative
+          }
         }
       }
     }
@@ -350,7 +361,9 @@ function parsePendingSection(page: PdfPage): PendingInstallment[] {
     if (!mov && !valorText) continue
     if (/^saldo/i.test(mov)) break // fim da lista de parcelas
     if (mov) chunks.push(mov)
-    if (valorText) {
+    // Só associa valor à linha que também tem descrição. Linhas apenas com
+    // valor (ex.: total) desalinhavam a lista de parcelas.
+    if (valorText && mov) {
       const parsed = parseMoneyToken(valorText)
       if (parsed) values.push(parsed.value)
     }
@@ -360,7 +373,7 @@ function parsePendingSection(page: PdfPage): PendingInstallment[] {
 
   // Reagrupa os trechos em "estabelecimento + (Parcela X de Y)".
   const joined = chunks.join(' ')
-  const re = /(.+?)\s*\(\s*parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s*\)/gi
+  const re = /(.+?)\s*\(?\s*parcela\s*(\d{1,2})\s*(?:de|\/)\s*(\d{1,2})\s*\)?/gi
   const out: PendingInstallment[] = []
   let match: RegExpExecArray | null
   let index = 0

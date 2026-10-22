@@ -2,7 +2,7 @@
 // Extração de transações a partir de TEXTO bruto (núcleo dos parsers)
 // ----------------------------------------------------------------------------
 // Heurísticas razoavelmente tolerantes para extratos brasileiros:
-//   - data dd/mm/aaaa (ou dd/mm) no início ou no meio da linha;
+//   - data dd/mm/aaaa, dd/mm, dd JUL 2026 ou "03 de julho de 2026";
 //   - valor monetário (vírgula ou ponto como decimal) ao final;
 //   - sinal: "-", parênteses "()" ou sufixo "D"/"C".
 // ============================================================================
@@ -27,7 +27,8 @@ const NOISE = [
   /^valor\b/i, /^saldo\b/i, /^extrato\b/i, /^per[íi]odo\b/i, /^total\b/i,
   /^autentica[çc][ãa]o\b/i, /^conta\b/i, /^ag[êe]ncia\b/i, /^lan[çc]amentos?\b/i,
   /^\d+\s+de\s+\d+\s+p[áa]ginas?/i, /^[^a-z0-9]*$/,
-  // Fatura de cartão: parcelamento da fatura, encargos e boleto.
+  // Fatura de cartão: vencimento, limites, parcelamento e encargos.
+  /^vencimento\b/i, /^limite\b/i, /^fatura anterior\b/i, /^resumo\b/i,
   /^parcelamento\b/i, /^encargos?\b/i, /^pagamento m[íi]nimo/i,
   /^iof (di[áa]rio|adicional|internacional)/i, /^multa/i, /^juros de mora/i,
   /^saldo (total|de|em aberto)/i, /^nosso n[úu]mero/i, /^n[ºo°]? ?documento/i,
@@ -39,11 +40,29 @@ const NOISE = [
   /^[\d\s.]{20,}$/,
 ]
 
+const MONTHS: Record<string, number> = {
+  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
+  jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
+}
+
+// Nomes de mês completos ou abreviados, exigindo fim de palavra para não
+// confundir "mar" com "marcenaria" nem "set" com "setor".
+const MONTH_PATTERN =
+  '(?:jan(?:eiro)?|fev(?:ereiro)?|mar(?:co|ço)?|abr(?:il)?|mai(?:o)?|' +
+  'jun(?:ho)?|jul(?:ho)?|ago(?:sto)?|set(?:embro)?|out(?:ubro)?|' +
+  'nov(?:embro)?|dez(?:embro)?)'
+
 interface MoneyMatch {
   index: number
   raw: string
   value: number
   negative: boolean
+}
+
+interface DateMatch {
+  iso: string
+  raw: string
+  index: number
 }
 
 /** Tenta interpretar um token como valor monetário BR ou US. */
@@ -88,8 +107,13 @@ export function parseMoneyToken(token: string): { value: number; negative: boole
     value = parseFloat(s.replace(',', '.'))
   } else if (/^\d+\.\d{2}$/.test(s)) {
     value = parseFloat(s)
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+    // Milhar sem centavos: "1.234" → 1234.
+    value = parseFloat(s.replace(/\./g, ''))
   } else if (/^\d+$/.test(s)) {
-    value = parseInt(s, 10) / 100 // valor sem centavos, ex.: "2500" → 25,00
+    // Valor inteiro. Em extratos brasileiros "2500" significa R$ 2.500,00,
+    // e não R$ 25,00.
+    value = parseFloat(s)
   }
 
   if (value == null || Number.isNaN(value)) return null
@@ -99,8 +123,10 @@ export function parseMoneyToken(token: string): { value: number; negative: boole
 /** Encontra todas as ocorrências de valores monetários na linha. */
 function findMoneyTokens(line: string): MoneyMatch[] {
   const results: MoneyMatch[] = []
-  // Padrão com R$ opcional, sinal opcional, milhar/décimal.
-  const re = /(?:R\$\s*)?[-+]?\s*(?:\(?\s*\d{1,3}(?:[.,]\d{3})*[.,]\d{2}\s*\)?|\d+[.,]\d{2}\b|\d{4,}\b)(?:\s*[DC]\b)?/gi
+  // Padrão com R$ opcional, sinal opcional, milhar/decimal.
+  // Números soltos de 4+ dígitos (anos, códigos, CPF) NÃO entram: antes eles
+  // viravam valores como R$ 20,26 a partir de "2026".
+  const re = /(?:[-+]\s*)?(?:R\$\s*)?[-+]?\s*(?:\(?\s*\d{1,3}(?:[.,]\d{3})*[.,]\d{2}\s*\)?|\d+[.,]\d{2}\b)(?:\s*[DC]\b)?(?!(?:[\d/\-]|[.,]\d))/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(line)) !== null) {
     const parsed = parseMoneyToken(m[0])
@@ -111,36 +137,95 @@ function findMoneyTokens(line: string): MoneyMatch[] {
   return results
 }
 
-/** Extrai uma data dd/mm/aaaa, dd/mm ou "03 de jul. 2026"; retorna ISO ou null. */
-function extractDate(segment: string): string | null {
-  // Formato por extenso: "03 de jul. 2026".
-  const ext = segment.match(/(\d{1,2})\s+de\s+([a-zç]{3,4})\.?(?:\s+de)?\s*(\d{4})/i)
-  if (ext) {
-    const months: Record<string, number> = {
-      jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
-      jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
-    }
-    const day = parseInt(ext[1], 10)
-    const month = months[ext[2].slice(0, 3).toLowerCase()]
-    const year = parseInt(ext[3], 10)
-    if (!month || day < 1 || day > 31) return null
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-  }
-
-  const m = segment.match(/(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?/)
-  if (!m) return null
-  let day = parseInt(m[1], 10)
-  let month = parseInt(m[2], 10)
-  let year = m[3] ? parseInt(m[3], 10) : new Date().getFullYear()
-  if (year < 100) year += 2000
-  if (day < 1 || day > 31 || month < 1 || month > 12) return null
+function toISODate(day: number, month: number, year: number): string | null {
+  if (day < 1 || month < 1 || month > 12) return null
+  const daysInMonth = new Date(year, month, 0).getDate()
+  if (day > daysInMonth) return null
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+function normalizeYear(value: string | undefined, fallbackYear: number): number {
+  if (!value) return fallbackYear
+  let year = parseInt(value, 10)
+  if (year < 100) year += 2000
+  return year
+}
+
+/**
+ * Procura uma data no texto e devolve ISO + trecho encontrado.
+ * Aceita "03 de jul. 2026", "03 JUL 2026", "03/07/2026" e "03/07".
+ */
+function findDateMatch(text: string, fallbackYear: number): DateMatch | null {
+  // Formato ISO (yyyy-mm-dd), comum em CSV/OFX e relatórios.
+  const isoRe = /(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/g
+  let m: RegExpExecArray | null
+  while ((m = isoRe.exec(text)) !== null) {
+    const iso = toISODate(parseInt(m[3], 10), parseInt(m[2], 10), parseInt(m[1], 10))
+    if (iso) return { iso, raw: m[0], index: m.index }
+  }
+
+  const monthRe = new RegExp(
+    `(\\d{1,2})\\s*(?:de\\s+)?(${MONTH_PATTERN})\\.?\\s*(?:de\\s+)?(\\d{2,4})?\\b`,
+    'gi',
+  )
+
+  while ((m = monthRe.exec(text)) !== null) {
+    const before = text.slice(Math.max(0, m.index - 12), m.index)
+    if (/parcela\s*$/i.test(before)) continue
+
+    const day = parseInt(m[1], 10)
+    const month = MONTHS[m[2].slice(0, 3).toLowerCase()]
+    const year = normalizeYear(m[3], fallbackYear)
+    if (!month) continue
+    const iso = toISODate(day, month, year)
+    if (iso) return { iso, raw: m[0], index: m.index }
+  }
+
+  const numericRe = /(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?/g
+  while ((m = numericRe.exec(text)) !== null) {
+    // "Parcela 3/4" não é uma data.
+    const before = text.slice(Math.max(0, m.index - 12), m.index)
+    if (/parcela\s*$/i.test(before)) continue
+
+    const day = parseInt(m[1], 10)
+    const month = parseInt(m[2], 10)
+    const year = normalizeYear(m[3], fallbackYear)
+    const iso = toISODate(day, month, year)
+    if (iso) return { iso, raw: m[0], index: m.index }
+  }
+
+  return null
+}
+
+/** Converte um texto com data para ISO (`yyyy-mm-dd`) ou null. */
+export function parseDateText(text: string, fallbackYear?: number): string | null {
+  return findDateMatch(text, fallbackYear ?? new Date().getFullYear())?.iso ?? null
+}
+
+export interface ExtractOptions {
+  /**
+   * Documento é fatura de cartão: valores negativos são créditos/pagamentos
+   * (entrada), e não despesas.
+   */
+  isFatura?: boolean
+}
+
 /** Extrai transações de um bloco de texto. */
-export function extractFromText(text: string, fallbackDate?: string): RawTransaction[] {
+export function extractFromText(
+  text: string,
+  fallbackDate?: string,
+  options: ExtractOptions = {},
+): RawTransaction[] {
   const lines = text.replace(/\r/g, '').split('\n')
   const result: RawTransaction[] = []
+  const fallbackYear = fallbackDate
+    ? parseInt(fallbackDate.slice(0, 4), 10)
+    : new Date().getFullYear()
+
+  // Data do último lançamento reconhecido. Linhas de continuação (IOF,
+  // encargos, detalhes de parcelamento) herdam essa data em vez de ficarem
+  // sem data nenhuma.
+  let lastDate: string | null = fallbackDate ?? null
 
   for (const rawLine of lines) {
     const line = rawLine.trim()
@@ -154,29 +239,25 @@ export function extractFromText(text: string, fallbackDate?: string): RawTransac
     const money = tokens[tokens.length - 1]
     const value = money.value
 
-    // Descrição = trecho antes do valor (removendo a data do início).
+    // Descrição = trecho antes do valor.
     let desc = line.slice(0, money.index).trim()
 
-    // Tenta data no início da descrição.
-    let date = extractDate(desc)
-    if (date) {
-      desc = desc
-        .replace(/^\d{1,2}\s+de\s+[a-zç]{3,4}\.?(?:\s+de)?\s*\d{4}/i, '')
-        .replace(/^\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?/, '')
+    // A data pode estar no início ou no meio da descrição; o trecho é
+    // removido para não sujar o nome do estabelecimento.
+    const found = findDateMatch(desc, fallbackYear)
+    let date: string
+    if (found) {
+      date = found.iso
+      desc = `${desc.slice(0, found.index)} ${desc.slice(found.index + found.raw.length)}`
+        .replace(/\s+/g, ' ')
         .trim()
+      lastDate = date
     } else {
-      // Tenta data em qualquer lugar da descrição.
-      const anywhere = desc.match(/\d{1,2}\s+de\s+[a-zç]{3,4}\.?(?:\s+de)?\s*\d{4}|\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?/i)
-      if (anywhere) {
-        date = extractDate(anywhere[0])
-        desc = desc.replace(anywhere[0], ' ').trim()
-      } else {
-        date = fallbackDate ?? ''
-      }
+      date = lastDate ?? ''
     }
 
     // Parcelamento: "(Parcela 03 de 04)" sai da descrição e vira metadado.
-    const installmentMatch = desc.match(/\(?\s*parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s*\)?/i)
+    const installmentMatch = desc.match(/\bparcela\s*(\d{1,2})\s*(?:de|\/)\s*(\d{1,2})\b/i)
     let installment: { current: number; total: number } | undefined
     if (installmentMatch) {
       const current = parseInt(installmentMatch[1], 10)
@@ -189,17 +270,20 @@ export function extractFromText(text: string, fallbackDate?: string): RawTransac
 
     // Remove sufixo "D"/"C" que sobrou no começo/meio e lixo de borda.
     desc = desc.replace(/^[|:\-\s]+|[|:\-\s]+$/g, '').trim()
+    // Linha só com "Parcela 3/4" ainda é uma despesa: não pode ser
+    // descartada por falta de nome do estabelecimento.
+    if (!desc && installment) desc = 'Compra parcelada'
     if (!desc) continue
 
     // Determina direção.
     const isEntradaKeyword = ENTRADA_KEYWORDS.some((k) => desc.toLowerCase().includes(k))
     let type: 'entrada' | 'saida'
-    if (money.negative) type = 'saida'
+    if (money.negative) type = options.isFatura ? 'entrada' : 'saida'
     else if (/C\b/i.test(money.raw)) type = 'entrada'
     else type = isEntradaKeyword ? 'entrada' : 'saida'
 
     result.push({
-      date: date ?? fallbackDate ?? '',
+      date: date || fallbackDate || '',
       description: desc,
       amount: value,
       type,

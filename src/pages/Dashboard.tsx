@@ -8,6 +8,7 @@ import { useFinance } from '../context/FinanceContext'
 import { activeTransactions, totalsOf, groupByCategory, groupByMerchant, groupByMonth, balanceEvolution } from '../lib/aggregate'
 import { biggestExpense, avgDailySpend, mostExpensiveWeekday, endOfMonthProjection, compareMonths, recurringExpenses, anomalies, duplicates, smartSummary, repeatedCharges, installmentPlans, topCharges } from '../lib/insights'
 import { formatBRL, periodLabel, formatDateShort } from '../lib/format'
+import { currentPeriod, projectionForPeriod, totalBudgetForPeriods } from '../lib/budget'
 import { categoryName, categoryColor } from '../config/categories'
 import { SectionTitle, Tag } from '../components/ui'
 import { NotebookIllustration } from '../components/Illustrations'
@@ -16,7 +17,7 @@ import { RankedList } from '../components/RankedList'
 import { ChartCard, DonutChart, MonthlyBarChart, BalanceLineChart } from '../components/charts'
 
 export function Dashboard() {
-  const { transactions, statements, loadSample } = useFinance()
+  const { transactions, statements, budgets, loadSample } = useFinance()
 
   const periods = useMemo(
     () => [...new Set(transactions.map((t) => t.date.slice(0, 7)))].sort().reverse(),
@@ -59,6 +60,20 @@ export function Dashboard() {
     [statements],
   )
 
+  const isAll = effectivePeriod === 'all'
+  const isCurrentMonth = !isAll && effectivePeriod === currentPeriod()
+  const totalBudget = useMemo(
+    () => totalBudgetForPeriods(budgets, isAll ? periods : [effectivePeriod]),
+    [budgets, isAll, periods, effectivePeriod],
+  )
+  const budgetPct = totalBudget > 0 ? (totals.saidas / totalBudget) * 100 : 0
+  const projection = useMemo(
+    () => projectionForPeriod(totals.saidas, isAll ? currentPeriod() : effectivePeriod),
+    [totals.saidas, isAll, effectivePeriod],
+  )
+  const willOverspend =
+    isCurrentMonth && totalBudget > 0 && projection.projection > totalBudget
+
   // ---- Estado vazio --------------------------------------------------------
   if (!transactions.length) {
     return (
@@ -86,7 +101,6 @@ export function Dashboard() {
     )
   }
 
-  const isAll = effectivePeriod === 'all'
   const heroLabel = isAll ? 'Total no período' : 'Total no mês'
 
   return (
@@ -171,8 +185,14 @@ export function Dashboard() {
       </ChartCard>
 
       {/* Alertas (anomalias / duplicidades / recorrentes) */}
-      {(suspicious.length > 0 || dups.length > 0 || recurring.length > 0) && (
+      {(suspicious.length > 0 || dups.length > 0 || recurring.length > 0 || willOverspend) && (
         <div className="alerts">
+          {willOverspend && (
+            <span className="alert-item">
+              <Tag tone="coral">Orçamento</Tag> no ritmo atual, o mês fecha em{' '}
+              {formatBRL(projection.projection)} (limite {formatBRL(totalBudget)})
+            </span>
+          )}
           {suspicious.length > 0 && (
             <span className="alert-item">
               <Tag tone="coral">Atenção</Tag> {suspicious.length} cobrança{suspicious.length > 1 ? 's' : ''} acima do normal
@@ -226,6 +246,13 @@ export function Dashboard() {
             <InsightCard label="Média por dia" value={formatBRL(avgDaily)} />
             <InsightCard label="Dia mais caro" value={weekday.weekday} detail={formatBRL(weekday.total)} />
             <InsightCard label="Projeção fim do mês" value={formatBRL(proj.projection)} detail={`${proj.daysLeft} dias restantes`} />
+            {totalBudget > 0 && (
+              <InsightCard
+                label={isAll ? 'Orçamento do período' : 'Orçamento do mês'}
+                value={`${Math.round(budgetPct)}%`}
+                detail={`${formatBRL(totals.saidas)} de ${formatBRL(totalBudget)}`}
+              />
+            )}
           </div>
         </div>
       </div>

@@ -32,7 +32,8 @@ import {
   saveBudgets,
   clearAllData,
 } from '../lib/storage'
-import { buildRuleFrom } from '../lib/categorize'
+import { buildRuleFrom, categoryForSaved } from '../lib/categorize'
+import { cleanImportArtifacts } from '../lib/normalize'
 import { generateSampleData } from '../lib/sample'
 import { uid } from '../lib/format'
 
@@ -56,9 +57,16 @@ interface FinanceContextValue {
   updateTransaction: (id: string, patch: Partial<Transaction>) => void
   deleteTransaction: (id: string) => void
   recategorizeTransaction: (id: string, categoryId: string, learn: boolean) => void
+  /** Limpa nomes e reaplica as regras de categoria. Retorna quantos lançamentos mudaram. */
+  reapplyCategories: () => number
   addRule: (pattern: string, categoryId: string) => void
   deleteRule: (id: string) => void
-  setBudget: (categoryId: string, amount: number) => void
+  setBudget: (categoryId: string, amount: number, period?: string) => void
+  /**
+   * Remove o valor próprio: do mês informado (`period`) ou o padrão da
+   * categoria (sem `period`). Depois disso vale novamente o padrão.
+   */
+  clearBudget: (categoryId: string, period?: string) => void
   deleteStatement: (id: string) => void
   loadSample: () => void
   clearAll: () => void
@@ -110,10 +118,36 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setTransactions((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
+  /**
+   * Atualiza os lançamentos salvos: limpa artefatos de importação nos nomes
+   * (ex.: "( )") e reaplica as regras de categoria. Categorias escolhidas
+   * manualmente são preservadas. Retorna quantos lançamentos mudaram.
+   */
+  const reapplyCategories = useCallback((): number => {
+    let changed = 0
+    const next = transactions.map((t) => {
+      const description = cleanImportArtifacts(t.description) || t.description
+      const merchant = cleanImportArtifacts(t.merchant) || t.merchant
+      const category =
+        t.categorySource === 'manual'
+          ? t.category
+          : categoryForSaved({ ...t, description, merchant }, rules)
+      if (description === t.description && merchant === t.merchant && category === t.category) {
+        return t
+      }
+      changed += 1
+      return { ...t, description, merchant, category }
+    })
+    if (changed > 0) setTransactions(next)
+    return changed
+  }, [transactions, rules])
+
   const recategorizeTransaction = useCallback(
     (id: string, categoryId: string, learn: boolean) => {
       setTransactions((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, category: categoryId } : t)),
+        prev.map((t) =>
+          t.id === id ? { ...t, category: categoryId, categorySource: 'manual' } : t,
+        ),
       )
       if (learn) {
         const tx = transactions.find((t) => t.id === id)
@@ -142,8 +176,44 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setRules((prev) => prev.filter((r) => r.id !== id))
   }, [])
 
-  const setBudget = useCallback((categoryId: string, amount: number) => {
-    setBudgets((prev) => ({ ...prev, [categoryId]: amount }))
+  const setBudget = useCallback(
+    (categoryId: string, amount: number, period?: string) => {
+      setBudgets((prev) => {
+        const current = prev[categoryId] ?? { months: {} }
+        if (period) {
+          // Valor próprio do mês (não altera os outros meses).
+          return {
+            ...prev,
+            [categoryId]: { ...current, months: { ...current.months, [period]: amount } },
+          }
+        }
+        // Valor padrão, usado por qualquer mês sem valor próprio.
+        return { ...prev, [categoryId]: { ...current, base: amount } }
+      })
+    },
+    [],
+  )
+
+  const clearBudget = useCallback((categoryId: string, period?: string) => {
+    setBudgets((prev) => {
+      const current = prev[categoryId]
+      if (!current) return prev
+
+      if (period) {
+        if (current.months[period] === undefined) return prev
+        const months = { ...current.months }
+        delete months[period]
+        return { ...prev, [categoryId]: { ...current, months } }
+      }
+
+      // Remove o padrão. Se não sobrar nenhum mês próprio, apaga a entrada.
+      if (Object.keys(current.months).length === 0) {
+        const next = { ...prev }
+        delete next[categoryId]
+        return next
+      }
+      return { ...prev, [categoryId]: { months: current.months } }
+    })
   }, [])
 
   const deleteStatement = useCallback((id: string) => {
@@ -175,9 +245,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       updateTransaction,
       deleteTransaction,
       recategorizeTransaction,
+      reapplyCategories,
       addRule,
       deleteRule,
       setBudget,
+      clearBudget,
       deleteStatement,
       loadSample,
       clearAll,
@@ -191,9 +263,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       updateTransaction,
       deleteTransaction,
       recategorizeTransaction,
+      reapplyCategories,
       addRule,
       deleteRule,
       setBudget,
+      clearBudget,
       deleteStatement,
       loadSample,
       clearAll,

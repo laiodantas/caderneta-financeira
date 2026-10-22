@@ -25,13 +25,16 @@ export function normalizeForMatch(text: string): string {
  * Edite para incluir os seus próprios comércios.
  */
 const MERCHANT_ALIASES: Array<[RegExp, string]> = [
-  // --- Transporte (antes de qualquer regra genérica) ------------------------
+  // --- Transporte e delivery (específicos antes dos genéricos) --------------
+  // "Uber Eats" precisa vir antes de "Uber"; "99Food" antes de "99".
+  [/uber ?eats|ubereats/i, 'Uber Eats'],
+  [/99 ?food|99food/i, '99Food'],
   [/uber/i, 'Uber'],
   [/^pop\s+\d{1,2}[a-z]{3}\s+\d{1,2}h\d{2}min/i, '99pop'],
   [/^99 ?pop|^pop\s+\d/i, '99pop'],
   [/99 ?app|99 ?taxi|^99 |\b99\b/i, '99'],
   [/ifood|ifd/i, 'iFood'],
-  [/uber ?eats/i, 'Uber Eats'],
+  [/rappi/i, 'Rappi'],
   [/netflix/i, 'Netflix'],
   [/spotify/i, 'Spotify'],
   [/disney/i, 'Disney+'],
@@ -56,11 +59,53 @@ const MERCHANT_ALIASES: Array<[RegExp, string]> = [
   [/smartfit|smart fit/i, 'Smart Fit'],
   [/nubank/i, 'Nubank'],
   [/mercadopago|mercado pago/i, 'Mercado Pago'],
-  // --- Assinaturas e serviços ----------------------------------------------
+  [/outback/i, 'Outback'],
+  [/bobs\b/i, "Bob's"],
+  // --- Saúde e pets ---------------------------------------------------------
+  [/unimed/i, 'Unimed'],
+  [/amil\b/i, 'Amil'],
+  [/bradesco ?saude/i, 'Bradesco Saúde'],
+  [/hapvida/i, 'Hapvida'],
+  [/cobasi/i, 'Cobasi'],
+  [/petz/i, 'Petz'],
+  [/petlove/i, 'Petlove'],
+  // --- Contas e transporte ---------------------------------------------------
+  [/sem ?parar/i, 'Sem Parar'],
+  [/veloe/i, 'Veloe'],
+  [/conectcar/i, 'ConectCar'],
+  [/enel/i, 'Enel'],
+  [/sabesp/i, 'Sabesp'],
+  [/comgas/i, 'Comgás'],
+  [/porto seguro/i, 'Porto Seguro'],
+  [/vivo\b/i, 'Vivo'],
+  [/claro\b/i, 'Claro'],
+  [/tim\b/i, 'TIM'],
+  [/\boi\b/i, 'Oi'],
+  // --- Assinaturas, educação e serviços -------------------------------------
   [/okeo/i, 'Okeo'],
   [/digitalocean/i, 'DigitalOcean'],
   [/express plan/i, 'Express Plan'],
+  [/alura/i, 'Alura'],
+  [/udemy/i, 'Udemy'],
+  [/coursera/i, 'Coursera'],
+  [/rocketseat/i, 'Rocketseat'],
+  [/openai|chatgpt/i, 'OpenAI'],
+  [/anthropic|claude/i, 'Anthropic'],
+  [/figma/i, 'Figma'],
+  [/notion/i, 'Notion'],
 ]
+
+/**
+ * Remove artefatos de importação dos nomes: marcador de parcela ("(Parcela 03
+ * de 04)") e parênteses vazios que sobram ("( )").
+ */
+export function cleanImportArtifacts(text: string): string {
+  return (text || '')
+    .replace(/\(?\s*\bparcela\s*\d{1,2}\s*(?:de|\/)\s*\d{1,2}\s*\)?/gi, ' ')
+    .replace(/\(\s*\)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 /**
  * Limpa e normaliza uma descrição para exibição como "merchant".
@@ -71,7 +116,7 @@ const MERCHANT_ALIASES: Array<[RegExp, string]> = [
 export function normalizeDescription(raw: string): string {
   if (!raw) return 'Sem descrição'
 
-  let s = raw.trim()
+  let s = cleanImportArtifacts(raw)
 
   // Remove sufixos de cidade/estado que costumam sujar o nome (ex.: "SAO PAULO").
   s = s.replace(/\b(S(AO|ÃO)? PAULO|RIO DE JANEIRO|CURITIBA|BELO HORIZONTE|BRASILIA|BRASÍLIA|PORT[AO]? ALEGRE|RECIFE|SALVADOR|FORTALEZA|CAMPINAS)\b/gi, '')

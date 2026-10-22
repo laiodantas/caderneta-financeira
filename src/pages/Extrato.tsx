@@ -189,6 +189,7 @@ export function Extrato() {
                             Parcela {t.installment.current}/{t.installment.total}
                           </span>
                         )}
+                        {!t.date && <span className="flag flag-repeated">sem data</span>}
                         {repeatedMerchants.has(t.merchant) && (
                           <span className="flag flag-repeated">repetida</span>
                         )}

@@ -42,7 +42,7 @@ const SPENDERS: SampleDef[] = [
 ]
 
 const INCOME: SampleDef[] = [
-  { merchant: 'Salário', description: 'SALARIO MENSAL', category: 'extras', type: 'entrada', base: 6500, spread: 0, perMonth: [1, 1], days: [5] },
+  { merchant: 'Salário', description: 'SALARIO MENSAL', category: 'renda', type: 'entrada', base: 6500, spread: 0, perMonth: [1, 1], days: [5] },
   { merchant: 'PIX recebido — Aluguel', description: 'PIX RECEBIDO ALUGUEL', category: 'pix_recebido', type: 'entrada', base: 800, spread: 0, perMonth: [1, 1], days: [8] },
   { merchant: 'Freela', description: 'PIX RECEBIDO FREELA', category: 'pix_recebido', type: 'entrada', base: 600, spread: 400, perMonth: [0, 1], days: [15, 22] },
 ]
