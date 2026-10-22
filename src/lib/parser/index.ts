@@ -2,7 +2,7 @@
 // Despachante de importação: escolhe o leitor conforme a extensão do arquivo.
 // ============================================================================
 
-import type { RawTransaction } from '../../types'
+import type { RawTransaction, PendingInstallment } from '../../types'
 import { parsePdf } from './pdf'
 import { parseCSV } from './csv'
 import { parseOFX } from './ofx'
@@ -14,6 +14,8 @@ export interface ParseResult {
   source: 'pdf' | 'csv' | 'ofx'
   ocrUsed?: boolean
   pages?: number
+  /** Parcelas que serão cobradas em faturas futuras. */
+  pendingInstallments?: PendingInstallment[]
 }
 
 export type ProgressFn = (msg: string) => void
@@ -30,6 +32,7 @@ export async function parseFile(file: File, onProgress?: ProgressFn): Promise<Pa
       source: 'pdf',
       ocrUsed: res.ocrUsed,
       pages: res.pages,
+      pendingInstallments: res.pendingInstallments,
     }
   }
 

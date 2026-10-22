@@ -10,12 +10,15 @@
 import type { RawTransaction } from '../../types'
 
 // Palavras que indicam uma ENTRADA (crédito) mesmo sem sinal explícito.
+// Cuidado: termos genéricos como "crédito" foram deixados de fora porque
+// aparecem em cobranças de despesa ("IOF CRÉDITO PARCELADO").
 const ENTRADA_KEYWORDS = [
-  'pix recebido', 'pix recebida', 'recebimento pix', 'credito', 'crédito',
+  'pix recebido', 'pix recebida', 'recebimento pix', 'pix creditado',
   'deposito', 'depósito', 'salario', 'salário', 'ted recebido', 'doc recebido',
   'estorno', 'rendimento', 'cashback', 'transferencia recebida',
   'transferência recebida', 'pagamento recebido', 'reembolso', 'dividendo',
   'resgate', 'aplicacao', 'aplicação', 'pix entrando', 'pix entrada',
+  'entrada creditada', 'credito em conta',
 ]
 
 // Linhas que claramente NÃO são transações.
@@ -24,6 +27,16 @@ const NOISE = [
   /^valor\b/i, /^saldo\b/i, /^extrato\b/i, /^per[íi]odo\b/i, /^total\b/i,
   /^autentica[çc][ãa]o\b/i, /^conta\b/i, /^ag[êe]ncia\b/i, /^lan[çc]amentos?\b/i,
   /^\d+\s+de\s+\d+\s+p[áa]ginas?/i, /^[^a-z0-9]*$/,
+  // Fatura de cartão: parcelamento da fatura, encargos e boleto.
+  /^parcelamento\b/i, /^encargos?\b/i, /^pagamento m[íi]nimo/i,
+  /^iof (di[áa]rio|adicional|internacional)/i, /^multa/i, /^juros de mora/i,
+  /^saldo (total|de|em aberto)/i, /^nosso n[úu]mero/i, /^n[ºo°]? ?documento/i,
+  /^b[êe]nefici[áa]rio/i, /^local de pagamento/i, /^pagador\b/i,
+  /^fale com a gente/i, /^encargos financeiros/i,
+  // Opções de parcelamento da fatura: "1 + 2 de R$ 709,49".
+  /^\d+\s*\+\s*\d+\s+de R\$/i,
+  // Linha de código de barras do boleto.
+  /^[\d\s.]{20,}$/,
 ]
 
 interface MoneyMatch {
@@ -98,8 +111,22 @@ function findMoneyTokens(line: string): MoneyMatch[] {
   return results
 }
 
-/** Extrai uma data dd/mm/aaaa ou dd/mm do texto; retorna ISO ou null. */
+/** Extrai uma data dd/mm/aaaa, dd/mm ou "03 de jul. 2026"; retorna ISO ou null. */
 function extractDate(segment: string): string | null {
+  // Formato por extenso: "03 de jul. 2026".
+  const ext = segment.match(/(\d{1,2})\s+de\s+([a-zç]{3,4})\.?(?:\s+de)?\s*(\d{4})/i)
+  if (ext) {
+    const months: Record<string, number> = {
+      jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
+      jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
+    }
+    const day = parseInt(ext[1], 10)
+    const month = months[ext[2].slice(0, 3).toLowerCase()]
+    const year = parseInt(ext[3], 10)
+    if (!month || day < 1 || day > 31) return null
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+
   const m = segment.match(/(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?/)
   if (!m) return null
   let day = parseInt(m[1], 10)
@@ -133,15 +160,30 @@ export function extractFromText(text: string, fallbackDate?: string): RawTransac
     // Tenta data no início da descrição.
     let date = extractDate(desc)
     if (date) {
-      desc = desc.replace(/^\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?/, '').trim()
+      desc = desc
+        .replace(/^\d{1,2}\s+de\s+[a-zç]{3,4}\.?(?:\s+de)?\s*\d{4}/i, '')
+        .replace(/^\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?/, '')
+        .trim()
     } else {
       // Tenta data em qualquer lugar da descrição.
-      const anywhere = desc.match(/\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?/)
+      const anywhere = desc.match(/\d{1,2}\s+de\s+[a-zç]{3,4}\.?(?:\s+de)?\s*\d{4}|\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?/i)
       if (anywhere) {
         date = extractDate(anywhere[0])
         desc = desc.replace(anywhere[0], ' ').trim()
       } else {
         date = fallbackDate ?? ''
+      }
+    }
+
+    // Parcelamento: "(Parcela 03 de 04)" sai da descrição e vira metadado.
+    const installmentMatch = desc.match(/\(?\s*parcela\s+(\d{1,2})\s+de\s+(\d{1,2})\s*\)?/i)
+    let installment: { current: number; total: number } | undefined
+    if (installmentMatch) {
+      const current = parseInt(installmentMatch[1], 10)
+      const total = parseInt(installmentMatch[2], 10)
+      if (current && total && current <= total) {
+        installment = { current, total }
+        desc = desc.replace(installmentMatch[0], ' ').replace(/\s+/g, ' ').trim()
       }
     }
 
@@ -156,7 +198,13 @@ export function extractFromText(text: string, fallbackDate?: string): RawTransac
     else if (/C\b/i.test(money.raw)) type = 'entrada'
     else type = isEntradaKeyword ? 'entrada' : 'saida'
 
-    result.push({ date: date ?? fallbackDate ?? '', description: desc, amount: value, type })
+    result.push({
+      date: date ?? fallbackDate ?? '',
+      description: desc,
+      amount: value,
+      type,
+      installment,
+    })
   }
 
   return result

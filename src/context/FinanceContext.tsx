@@ -19,6 +19,7 @@ import type {
   Transaction,
   LearnedRule,
   BudgetMap,
+  PendingInstallment,
 } from '../types'
 import {
   loadStatements,
@@ -41,6 +42,8 @@ export interface CommitPayload {
   period: string
   fileName?: string
   transactions: Transaction[]
+  /** Parcelas que serão cobradas em faturas futuras. */
+  pendingInstallments?: PendingInstallment[]
 }
 
 interface FinanceContextValue {
@@ -86,6 +89,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         importedAt: new Date().toISOString(),
         transactionCount: payload.transactions.length,
         fileName: payload.fileName,
+        pendingInstallments: payload.pendingInstallments,
       }
 
       // Garante que todas as transações apontem para este extrato.

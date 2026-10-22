@@ -24,6 +24,16 @@ function matchLearned(descNormalized: string, rules: LearnedRule[]): string | nu
   return null
 }
 
+/**
+ * Expressão que casa a palavra-chave como palavra inteira.
+ * (O marcador de espaço no final das palavras-chave é perdido na
+ * normalização, então a fronteira é reconstruída aqui.)
+ */
+function wordRegex(keyword: string): RegExp {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^a-z0-9])${escaped}(s|es)?([^a-z0-9]|$)`)
+}
+
 /** Aplica palavras-chave; retorna o id da categoria ou null. */
 function matchKeywords(descNormalized: string): string | null {
   for (const cat of CATEGORIES) {
@@ -31,10 +41,10 @@ function matchKeywords(descNormalized: string): string | null {
     for (const kw of cat.keywords) {
       const k = normalizeForMatch(kw)
       if (!k) continue
-      // Palavra-chave com espaço no final indica fronteira de palavra.
-      if (k.endsWith(' ')) {
-        if (descNormalized === k.trim() || descNormalized.startsWith(k)) return cat.id
-        if (descNormalized.includes(` ${k.trim()}`)) return cat.id
+      // Palavra-chave escrita com espaço no final = fronteira de palavra
+      // (ex.: "oba " não pode casar com "global").
+      if (/\s$/.test(kw)) {
+        if (wordRegex(k).test(descNormalized)) return cat.id
       } else if (descNormalized.includes(k)) {
         return cat.id
       }
@@ -46,15 +56,21 @@ function matchKeywords(descNormalized: string): string | null {
 /**
  * Classifica uma descrição crua.
  * `rules` são as regras aprendidas pelo usuário.
+ * `hint` é o texto usado na busca por palavras-chave (padrão: o nome
+ * canônico do estabelecimento, ex.: "Uber", "99pop", "iFood").
  */
-export function categorize(description: string, rules: LearnedRule[] = []): string {
+export function categorize(
+  description: string,
+  rules: LearnedRule[] = [],
+  hint?: string,
+): string {
   const normalized = normalizeForMatch(description)
   if (!normalized) return DEFAULT_CATEGORY
 
   const learned = matchLearned(normalized, rules)
   if (learned) return learned
 
-  const kw = matchKeywords(normalized)
+  const kw = matchKeywords(normalizeForMatch(hint || normalizeDescription(description)))
   if (kw) return kw
 
   return DEFAULT_CATEGORY
@@ -87,8 +103,21 @@ export function rawToTransaction(
   bank: string | undefined,
   rules: LearnedRule[],
 ): Transaction {
-  const merchant = normalizeDescription(raw.description)
-  const category = categorize(raw.description, rules)
+  const merchant = raw.merchant ?? normalizeDescription(raw.description)
+  const category = categorize(raw.description, rules, raw.categoryHint)
+
+  // Tags automáticas que ajudam a identificar o tipo de lançamento.
+  const tags: string[] = []
+  if (raw.installment) {
+    tags.push(`Parcela ${raw.installment.current}/${raw.installment.total}`)
+  }
+  if (raw.creditInstallment) {
+    tags.push('Pix no crédito')
+  }
+  if (raw.originalCurrency) {
+    tags.push(`Moeda original: ${raw.originalCurrency}`)
+  }
+
   return {
     id: uid(),
     date: raw.date,
@@ -99,6 +128,9 @@ export function rawToTransaction(
     category,
     statementId,
     bank,
-    tags: [],
+    tags,
+    installment: raw.installment,
+    originalAmount: raw.originalAmount,
+    originalCurrency: raw.originalCurrency,
   }
 }

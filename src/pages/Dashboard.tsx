@@ -6,8 +6,9 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useFinance } from '../context/FinanceContext'
 import { activeTransactions, totalsOf, groupByCategory, groupByMerchant, groupByMonth, balanceEvolution } from '../lib/aggregate'
-import { biggestExpense, avgDailySpend, mostExpensiveWeekday, endOfMonthProjection, compareMonths, recurringExpenses, anomalies, duplicates, smartSummary } from '../lib/insights'
-import { formatBRL, periodLabel } from '../lib/format'
+import { biggestExpense, avgDailySpend, mostExpensiveWeekday, endOfMonthProjection, compareMonths, recurringExpenses, anomalies, duplicates, smartSummary, repeatedCharges, installmentPlans, topCharges } from '../lib/insights'
+import { formatBRL, periodLabel, formatDateShort } from '../lib/format'
+import { categoryName, categoryColor } from '../config/categories'
 import { SectionTitle, Tag } from '../components/ui'
 import { NotebookIllustration } from '../components/Illustrations'
 import { StatStrip } from '../components/StatStrip'
@@ -15,7 +16,7 @@ import { RankedList } from '../components/RankedList'
 import { ChartCard, DonutChart, MonthlyBarChart, BalanceLineChart } from '../components/charts'
 
 export function Dashboard() {
-  const { transactions, loadSample } = useFinance()
+  const { transactions, statements, loadSample } = useFinance()
 
   const periods = useMemo(
     () => [...new Set(transactions.map((t) => t.date.slice(0, 7)))].sort().reverse(),
@@ -48,6 +49,15 @@ export function Dashboard() {
   const suspicious = useMemo(() => anomalies(active), [active])
   const dups = useMemo(() => duplicates(active), [active])
   const summary = useMemo(() => smartSummary(filtered), [filtered])
+
+  // Cobranças repetidas, parcelamentos e as 5 maiores cobranças.
+  const repeated = useMemo(() => repeatedCharges(filtered), [filtered])
+  const plans = useMemo(() => installmentPlans(active), [active])
+  const top5 = useMemo(() => topCharges(filtered, 5), [filtered])
+  const pending = useMemo(
+    () => statements.flatMap((s) => s.pendingInstallments ?? []),
+    [statements],
+  )
 
   // ---- Estado vazio --------------------------------------------------------
   if (!transactions.length) {
@@ -219,6 +229,106 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* 5 maiores cobranças + cobranças repetidas */}
+      <div className="grid-2 section-gap">
+        <div className="card">
+          <SectionTitle>As 5 maiores cobranças</SectionTitle>
+          <RankedList
+            emptyText="Nenhuma cobrança neste período."
+            items={top5.map((t) => ({
+              id: t.id,
+              title: t.merchant,
+              subtitle: `${formatDateShort(t.date)} · ${categoryName(t.category)}`,
+              tag: t.installment ? `${t.installment.current}/${t.installment.total}` : undefined,
+              value: formatBRL(t.amount),
+              subvalue: t.originalCurrency
+                ? `${t.originalAmount?.toFixed(2)} ${t.originalCurrency}`
+                : undefined,
+            }))}
+          />
+        </div>
+
+        <div className="card">
+          <SectionTitle
+            action={
+              <Link to="/extrato" className="section-link">
+                Ver no extrato →
+              </Link>
+            }
+          >
+            Cobranças repetidas
+          </SectionTitle>
+          <RankedList
+            emptyText="Nenhuma cobrança repetida neste período."
+            items={repeated.slice(0, 8).map((r) => ({
+              id: r.merchant,
+              title: r.merchant,
+              subtitle: `${r.count}× · ${formatDates(r.dates)}`,
+              tag: r.sameDay > 0 ? 'mesmo dia' : r.monthly ? 'mensal' : undefined,
+              value: formatBRL(r.total),
+              subvalue: `maior ${formatBRL(r.max)}`,
+            }))}
+          />
+        </div>
+      </div>
+
+      {/* Parcelamentos */}
+      {(plans.length > 0 || pending.length > 0) && (
+        <div className="card section-gap">
+          <SectionTitle>Parcelamentos</SectionTitle>
+          <p className="muted installment-note">
+            Compras parceladas de todos os períodos importados
+          </p>
+          {plans.length === 0 && pending.length === 0 && (
+            <p className="rank-empty">Nenhuma compra parcelada por aqui.</p>
+          )}
+          {plans.length > 0 && (
+            <ul className="installment-list">
+              {plans.map((p) => (
+                <li key={p.key} className="installment-row">
+                  <div className="installment-head">
+                    <span className="installment-name">{p.merchant}</span>
+                    <Tag tone="blue">
+                      Parcela {p.current}/{p.total}
+                    </Tag>
+                    <span className="installment-total">{formatBRL(p.planTotal)}</span>
+                  </div>
+                  <div className="installment-meta">
+                    {formatBRL(p.installmentAmount)} por parcela · pago {formatBRL(p.paid)} · falta{' '}
+                    {formatBRL(p.remaining)}
+                  </div>
+                  <div className="budget-bar">
+                    <div
+                      className="budget-fill"
+                      style={{ width: `${Math.round(p.progress)}%`, background: categoryColor(p.categoryId) }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {pending.length > 0 && (
+            <>
+              <div className="installment-subtitle">Próximas parcelas a cobrar</div>
+              <ul className="installment-list">
+                {pending.map((p, i) => (
+                  <li key={`${p.description}-${p.current}-${i}`} className="installment-row">
+                    <div className="installment-head">
+                      <span className="installment-name">{p.description}</span>
+                      <Tag tone="green">
+                        Parcela {p.current}/{p.total}
+                      </Tag>
+                      <span className="installment-total">{formatBRL(p.amount)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -231,4 +341,11 @@ function InsightCard({ label, value, detail }: { label: string; value: string; d
       {detail && <span className="insight-detail">{detail}</span>}
     </div>
   )
+}
+
+/** Lista as datas de um conjunto de cobranças (encurtando quando são muitas). */
+function formatDates(dates: string[]): string {
+  const shown = dates.slice(0, 4).map(formatDateShort)
+  const rest = dates.length - shown.length
+  return rest > 0 ? `${shown.join(', ')} +${rest}` : shown.join(', ')
 }

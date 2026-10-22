@@ -14,7 +14,7 @@ import { statementLabelFrom } from '../lib/normalize'
 import { periodLabel, uid } from '../lib/format'
 import { SectionTitle, Tag } from '../components/ui'
 import { NotebookIllustration } from '../components/Illustrations'
-import type { RawTransaction, Transaction } from '../types'
+import type { RawTransaction, Transaction, PendingInstallment } from '../types'
 
 interface PreviewRow {
   id: string
@@ -23,6 +23,10 @@ interface PreviewRow {
   amountStr: string
   type: 'entrada' | 'saida'
   category: string
+  /** Texto usado na categorização (vem do parser). */
+  categoryHint?: string
+  /** Parcela X de Y, quando a compra é parcelada. */
+  installment?: { current: number; total: number }
 }
 
 export function Importar() {
@@ -43,6 +47,7 @@ export function Importar() {
   const [source, setSource] = useState<'pdf' | 'csv' | 'ofx'>('pdf')
   const [ocrUsed, setOcrUsed] = useState(false)
   const [preview, setPreview] = useState<PreviewRow[]>([])
+  const [pending, setPending] = useState<PendingInstallment[]>([])
   const [imported, setImported] = useState<string | null>(null)
 
   const canImport = preview.length > 0
@@ -62,7 +67,9 @@ export function Importar() {
         description: raw.description,
         amountStr: raw.amount.toFixed(2).replace('.', ','),
         type: raw.type,
-        category: categorize(raw.description, rules),
+        category: categorize(raw.description, rules, raw.categoryHint),
+        categoryHint: raw.categoryHint,
+        installment: raw.installment,
       }))
       const detectedPeriod = detectPeriod(res.transactions)
 
@@ -72,6 +79,7 @@ export function Importar() {
       setLabel(statementLabelFrom(file.name, res.bank, detectedPeriod))
       setSource(res.source)
       setOcrUsed(Boolean(res.ocrUsed))
+      setPending(res.pendingInstallments ?? [])
       setPreview(rows)
 
       if (!rows.length) {
@@ -93,7 +101,14 @@ export function Importar() {
       if (!Number.isFinite(amount) || amount <= 0) continue
       if (!row.description.trim()) continue
       const tx = rawToTransaction(
-        { date: row.date, description: row.description, amount, type: row.type },
+        {
+          date: row.date,
+          description: row.description,
+          amount,
+          type: row.type,
+          categoryHint: row.categoryHint,
+          installment: row.installment,
+        },
         '',
         bank,
         rules,
@@ -102,13 +117,21 @@ export function Importar() {
       txs.push(tx)
     }
 
-    commitImport({ label: label || statementLabelFrom(fileName, bank, period), bank, period, fileName, transactions: txs })
+    commitImport({
+      label: label || statementLabelFrom(fileName, bank, period),
+      bank,
+      period,
+      fileName,
+      transactions: txs,
+      pendingInstallments: pending,
+    })
     setImported(label || fileName)
     setPreview([])
   }
 
   function reset() {
     setPreview([])
+    setPending([])
     setFileName('')
     setError(null)
     setImported(null)
@@ -220,6 +243,9 @@ export function Importar() {
             <div className="meta-info">
               {source.toUpperCase()} · {preview.length} transações{' '}
               {ocrUsed && <Tag tone="blue">OCR usado</Tag>}
+              {pending.length > 0 && (
+                <Tag tone="green">{pending.length} parcelas a cobrar</Tag>
+              )}
             </div>
           </div>
 
@@ -254,6 +280,11 @@ export function Importar() {
                           value={row.description}
                           onChange={(e) => updateRow(i, { description: e.target.value })}
                         />
+                        {row.installment && (
+                          <span className="preview-tag">
+                            Parcela {row.installment.current}/{row.installment.total}
+                          </span>
+                        )}
                       </td>
                       <td>
                         <select

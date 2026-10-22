@@ -1041,6 +1041,109 @@ button {
 }
 
 /* ==========================================================================
+   Parcelamentos (Dashboard)
+   ========================================================================== */
+
+.installment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.installment-row {
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.installment-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.installment-name {
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.installment-total {
+  font-weight: 700;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+.installment-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 3px 0 7px;
+}
+
+.installment-subtitle {
+  margin: 18px 0 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.installment-note {
+  margin: -6px 0 10px;
+  font-size: 0.8rem;
+}
+
+/* Etiquetas do extrato */
+.td-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.flag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.flag-parcel {
+  background: rgba(30, 42, 74, 0.08);
+  color: var(--navy);
+}
+
+.flag-repeated {
+  background: var(--coral-soft);
+  color: var(--coral-deep);
+}
+
+.flag-currency {
+  background: rgba(94, 139, 139, 0.14);
+  color: #3f6b6b;
+}
+
+/* Etiqueta de parcela na pré-visualização de importação */
+.preview-tag {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(30, 42, 74, 0.08);
+  color: var(--navy);
+}
+
+/* ==========================================================================
    Extrato (tabela e filtros)
    ========================================================================== */
 

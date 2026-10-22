@@ -34,6 +34,16 @@ export function Extrato() {
     [transactions],
   )
 
+  // Estabelecimentos cobrados mais de uma vez: marcados como "repetida".
+  const repeatedMerchants = useMemo(() => {
+    const count = new Map<string, number>()
+    for (const t of transactions) {
+      if (t.type !== 'saida') continue
+      count.set(t.merchant, (count.get(t.merchant) ?? 0) + 1)
+    }
+    return new Set([...count.entries()].filter(([, n]) => n > 1).map(([m]) => m))
+  }, [transactions])
+
   const filtered = useMemo(() => {
     const q = normalizeForMatch(search)
     const min = minVal ? parseFloat(minVal.replace(',', '.')) : null
@@ -173,6 +183,21 @@ export function Extrato() {
                       {t.merchant !== t.description && (
                         <span className="td-desc">{t.description}</span>
                       )}
+                      <span className="td-flags">
+                        {t.installment && (
+                          <span className="flag flag-parcel">
+                            Parcela {t.installment.current}/{t.installment.total}
+                          </span>
+                        )}
+                        {repeatedMerchants.has(t.merchant) && (
+                          <span className="flag flag-repeated">repetida</span>
+                        )}
+                        {t.originalCurrency && (
+                          <span className="flag flag-currency">
+                            {t.originalAmount?.toFixed(2)} {t.originalCurrency}
+                          </span>
+                        )}
+                      </span>
                       {t.status === 'ignorar' && <span className="td-status-ignore">ignorada</span>}
                     </td>
                     <td>

@@ -21,10 +21,14 @@ export function normalizeForMatch(text: string): string {
 /**
  * Mapa de apelidos → nome canônico do estabelecimento.
  * A chave é uma expressão regular (case-insensitive) aplicada à descrição
- * ORIGINAL. Edite para incluir os seus próprios comércios.
+ * ORIGINAL. A ordem importa: o primeiro padrão que casar vence.
+ * Edite para incluir os seus próprios comércios.
  */
 const MERCHANT_ALIASES: Array<[RegExp, string]> = [
+  // --- Transporte (antes de qualquer regra genérica) ------------------------
   [/uber/i, 'Uber'],
+  [/^pop\s+\d{1,2}[a-z]{3}\s+\d{1,2}h\d{2}min/i, '99pop'],
+  [/^99 ?pop|^pop\s+\d/i, '99pop'],
   [/99 ?app|99 ?taxi|^99 |\b99\b/i, '99'],
   [/ifood|ifd/i, 'iFood'],
   [/uber ?eats/i, 'Uber Eats'],
@@ -52,6 +56,10 @@ const MERCHANT_ALIASES: Array<[RegExp, string]> = [
   [/smartfit|smart fit/i, 'Smart Fit'],
   [/nubank/i, 'Nubank'],
   [/mercadopago|mercado pago/i, 'Mercado Pago'],
+  // --- Assinaturas e serviços ----------------------------------------------
+  [/okeo/i, 'Okeo'],
+  [/digitalocean/i, 'DigitalOcean'],
+  [/express plan/i, 'Express Plan'],
 ]
 
 /**

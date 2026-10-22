@@ -28,12 +28,25 @@ npm run typecheck
 
 - **Importar** PDF (com OCR automático para extratos escaneados), CSV ou OFX,
   com pré-visualização editável antes de confirmar.
+- **Fatura de cartão lida por colunas**: o layout `Data | Movimentação |
+  Beneficiário | Valor` é reconstruído pelas coordenadas do texto, então a
+  data, o valor e o estabelecimento saem exatos — sem o vencimento, o boleto,
+  as opções de parcelamento ou as charges de juros virarem "transações".
+- **Agrupar** estabelecimentos equivalentes: `DL*UberRides` vira **Uber**,
+  `POP 09Set 12h10min` vira **99pop**, `IFD*...` vira **iFood**, etc.
 - **Categoriza e agrupa** automaticamente por estabelecimento.
 - **Aprende** quando você corrige uma categoria (regras salvas no navegador).
 - **Painel** com total, indicadores, gráfico de rosca (categorias), barras
   (entradas/saídas por mês) e linha (evolução do saldo).
+- **Card "As 5 maiores cobranças"**: as cinco despesas individuais mais caras.
+- **Card "Cobranças repetidas"**: quem foi cobrado mais de uma vez no período
+  (com aviso de repetição no mesmo dia).
+- **Card "Parcelamentos"**: cada plano parcelado com parcela X/Y, valor da
+  parcela, total planejado, quanto já foi pago e quanto falta — além das
+  parcelas que já estão na fila para a próxima fatura.
 - **Categorias** com orçamento por categoria e barra de progresso.
-- **Extrato** completo com busca, filtros, ordenação e edição.
+- **Extrato** completo com busca, filtros, ordenação e edição, com etiquetas
+  de "Parcela 3/4", "repetida" e moeda original.
 - **Insights**: maior despesa, média diária, dia mais caro, projeção do mês,
   gastos recorrentes, cobranças suspeitas e duplicidades.
 - Marca transações como **essencial**, **supérflua** ou **ignorar**; adiciona
@@ -57,10 +70,11 @@ src/
 ├─ config/        # categorias e bancos (fácil de editar)
 ├─ lib/
 │  ├─ parser/     # PDF (pdf.js), CSV, OFX, OCR (tesseract), texto genérico
+│  │               # e fatura.ts (fatura de cartão, leitura por colunas)
 │  ├─ normalize.ts # limpeza de descrições
 │  ├─ categorize.ts# classificação automática + aprendizado
 │  ├─ aggregate.ts # totais e agrupamentos
-│  ├─ insights.ts  # insights, recorrentes, anomalias
+│  ├─ insights.ts  # insights, recorrentes, anomalias, parcelamentos
 │  ├─ storage.ts   # persistência em localStorage
 │  └─ sample.ts    # dados de exemplo
 ├─ context/       # estado global (React Context)

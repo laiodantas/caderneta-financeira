@@ -69,6 +69,134 @@ export function recurringExpenses(txs: Transaction[]): MerchantGroup[] {
     .slice(0, 8)
 }
 
+export interface RepeatedCharge {
+  merchant: string
+  categoryId: string
+  /** Quantas vezes o estabelecimento foi cobrado. */
+  count: number
+  /** Soma de todas as cobranças. */
+  total: number
+  /** Datas das cobranças (ordenadas). */
+  dates: string[]
+  /** Aparece em mais de um mês (recorrência mensal). */
+  monthly: boolean
+  /** Quantas vezes repetiu no mesmo dia (possível duplicidade). */
+  sameDay: number
+  /** Maior cobrança individual. */
+  max: number
+}
+
+/**
+ * Destaca COBRANÇAS REPETIDAS: o mesmo estabelecimento sendo cobrado mais de
+ * uma vez no período (não importa se é no mesmo dia ou em dias diferentes).
+ * É o tipo de coisa que passa batido numa fatura de cartão.
+ */
+export function repeatedCharges(txs: Transaction[], minCount = 2): RepeatedCharge[] {
+  const saidas = txs.filter((t) => t.type === 'saida')
+  const byMerchant = new Map<string, Transaction[]>()
+  for (const t of saidas) {
+    const arr = byMerchant.get(t.merchant) ?? []
+    arr.push(t)
+    byMerchant.set(t.merchant, arr)
+  }
+
+  const out: RepeatedCharge[] = []
+  for (const [merchant, list] of byMerchant) {
+    if (list.length < minCount) continue
+    const dates = list.map((t) => t.date).sort()
+    const dayCount = new Map<string, number>()
+    for (const d of dates) dayCount.set(d, (dayCount.get(d) ?? 0) + 1)
+    const sameDay = [...dayCount.values()].filter((n) => n > 1).length
+    const months = new Set(dates.map((d) => d.slice(0, 7)))
+
+    out.push({
+      merchant,
+      categoryId: list[0].category,
+      count: list.length,
+      total: list.reduce((a, t) => a + t.amount, 0),
+      dates,
+      monthly: months.size > 1,
+      sameDay,
+      max: Math.max(...list.map((t) => t.amount)),
+    })
+  }
+
+  return out.sort((a, b) => b.total - a.total || b.count - a.count)
+}
+
+export interface InstallmentPlan {
+  /** Chave estável do plano (estabelecimento + nº de parcelas). */
+  key: string
+  description: string
+  merchant: string
+  categoryId: string
+  /** Parcela mais alta vista até agora. */
+  current: number
+  /** Total de parcelas do plano. */
+  total: number
+  /** Valor de uma parcela. */
+  installmentAmount: number
+  /** Valor total planejado (parcela × total). */
+  planTotal: number
+  /** Quanto já foi cobrado (soma das parcelas pagas). */
+  paid: number
+  /** Quanto ainda falta cobrar. */
+  remaining: number
+  /** Percentual já pago (0–100). */
+  progress: number
+  transactions: Transaction[]
+}
+
+/**
+ * Agrupa as transações parceladas em PLANOS (compra parcelada), para não
+ * contar cada parcela como uma despesa nova.
+ */
+export function installmentPlans(txs: Transaction[]): InstallmentPlan[] {
+  const parceladas = txs.filter((t) => t.installment)
+  const byPlan = new Map<string, Transaction[]>()
+
+  for (const t of parceladas) {
+    const key = `${t.merchant}|${t.installment!.total}`
+    const arr = byPlan.get(key) ?? []
+    arr.push(t)
+    byPlan.set(key, arr)
+  }
+
+  const plans: InstallmentPlan[] = []
+  for (const [key, list] of byPlan) {
+    const total = list[0].installment!.total
+    const current = Math.max(...list.map((t) => t.installment!.current))
+    const installmentAmount = Math.max(...list.map((t) => t.amount))
+    const paid = list.reduce((a, t) => a + t.amount, 0)
+    const planTotal = installmentAmount * total
+
+    plans.push({
+      key,
+      description: list[0].description,
+      merchant: list[0].merchant,
+      categoryId: list[0].category,
+      current,
+      total,
+      installmentAmount,
+      planTotal,
+      paid,
+      remaining: Math.max(0, planTotal - paid),
+      progress: planTotal ? Math.min(100, (paid / planTotal) * 100) : 0,
+      transactions: list,
+    })
+  }
+
+  return plans.sort((a, b) => b.planTotal - a.planTotal)
+}
+
+/** As N maiores cobranças individuais (saídas) do conjunto. */
+export function topCharges(txs: Transaction[], limit = 5): Transaction[] {
+  return txs
+    .filter((t) => t.type === 'saida')
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, limit)
+}
+
 /** Detecta transações muito acima do normal para o mesmo estabelecimento. */
 export function anomalies(txs: Transaction[]): Transaction[] {
   const saidas = txs.filter((t) => t.type === 'saida')
