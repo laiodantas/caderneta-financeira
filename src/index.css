@@ -1069,39 +1069,141 @@ button {
 }
 
 /* Lista de estabelecimentos na categoria */
-.merchant-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--line);
+.merchant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
-.merchant-row {
+.merchant-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fffdf7;
+  overflow: hidden;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.merchant-card:hover {
+  border-color: rgba(30, 42, 74, 0.18);
+}
+
+.merchant-card.is-open {
+  grid-column: 1 / -1;
+  border-color: rgba(199, 79, 62, 0.35);
+  box-shadow: var(--shadow-sm);
+}
+
+.merchant-card-head {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 2px;
-  border-bottom: 1px solid var(--line);
-  font-size: 0.88rem;
+  padding: 10px 12px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--navy);
 }
 
-.merchant-name {
-  font-weight: 600;
-  color: var(--navy);
+.merchant-card-head:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: -2px;
+}
+
+.merchant-card-name {
   flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 0.86rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.merchant-count {
+.merchant-card-meta {
+  flex: none;
+  font-size: 0.76rem;
   color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.merchant-card-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--coral-soft);
+  color: var(--coral-deep);
+  font-weight: 700;
+  line-height: 1;
+  font-size: 0.9rem;
+}
+
+.merchant-tx-list {
+  list-style: none;
+  margin: 0;
+  padding: 2px 12px 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.merchant-tx {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(232, 224, 206, 0.6);
   font-size: 0.8rem;
 }
 
-.merchant-value {
+.merchant-tx:last-child {
+  border-bottom: 0;
+}
+
+.merchant-tx-date {
+  flex: none;
+  width: 76px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.merchant-tx-desc {
+  flex: 1;
+  min-width: 0;
+  color: var(--navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.merchant-tx-value {
+  flex: none;
   font-weight: 700;
   color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.merchant-more {
+  display: inline-block;
+  margin-top: 2px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--coral-deep);
+  cursor: pointer;
+}
+
+.merchant-more:hover {
+  text-decoration: underline;
 }
 
 /* Fila de "sem categoria" */
@@ -1945,6 +2047,14 @@ textarea.input {
 
   .nav-pill {
     white-space: nowrap;
+  }
+
+  .merchant-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .merchant-tx-date {
+    width: 68px;
   }
 
   .btn-header {

@@ -6,10 +6,16 @@
 // limite é a soma dos orçamentos dos meses importados.
 // ============================================================================
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useFinance } from '../context/FinanceContext'
-import { activeTransactions, totalsOf, groupByCategory, groupByMerchant } from '../lib/aggregate'
+import {
+  activeTransactions,
+  totalsOf,
+  groupByCategory,
+  groupByMerchant,
+  type MerchantGroup,
+} from '../lib/aggregate'
 import { CATEGORIES } from '../config/categories'
 import {
   budgetBase,
@@ -21,7 +27,7 @@ import {
   hasMonthOverride,
   projectionForPeriod,
 } from '../lib/budget'
-import { formatBRL, periodLabel } from '../lib/format'
+import { formatBRL, formatDateBR, periodLabel } from '../lib/format'
 import { EmptyState, Tag } from '../components/ui'
 import { NotebookIllustration } from '../components/Illustrations'
 import { UncategorizedQueue } from '../components/UncategorizedQueue'
@@ -176,7 +182,7 @@ export function Categorias() {
               total={g.total}
               count={g.count}
               percent={g.percent}
-              merchants={groupByMerchant(scoped, g.categoryId).slice(0, 4)}
+              merchants={groupByMerchant(scoped, g.categoryId)}
               monthlyBudget={monthlyBudget}
               budgetTotal={budgetTotal}
               source={source}
@@ -221,7 +227,7 @@ function CategoryCard({
   total: number
   count: number
   percent: number
-  merchants: { merchant: string; total: number; count: number }[]
+  merchants: MerchantGroup[]
   /** Orçamento mensal (valor editável). */
   monthlyBudget: number
   /** Orçamento equivalente ao período exibido (soma dos meses). */
@@ -239,6 +245,8 @@ function CategoryCard({
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const [showAllMerchants, setShowAllMerchants] = useState(false)
+  const visibleMerchants = showAllMerchants ? merchants : merchants.slice(0, 6)
 
   const pct = budgetTotal > 0 ? (total / budgetTotal) * 100 : 0
   const over = budgetTotal > 0 && total > budgetTotal
@@ -352,22 +360,80 @@ function CategoryCard({
         )}
       </div>
 
-      {/* Estabelecimentos */}
+      {/* Estabelecimentos: um card por grupo; ao abrir, lista os débitos com data. */}
       {merchants.length > 0 && (
-        <ul className="merchant-list">
-          {merchants.map((m) => (
-            <li key={m.merchant} className="merchant-row">
-              <span className="merchant-name">{m.merchant}</span>
-              <span className="merchant-count">{m.count}×</span>
-              <span className="merchant-value">{formatBRL(m.total)}</span>
-            </li>
+        <div className="merchant-grid">
+          {visibleMerchants.map((m) => (
+            <MerchantCard key={m.merchant} group={m} />
           ))}
-        </ul>
+        </div>
+      )}
+      {merchants.length > 6 && (
+        <button
+          type="button"
+          className="merchant-more"
+          onClick={() => setShowAllMerchants((v) => !v)}
+        >
+          {showAllMerchants
+            ? 'Mostrar menos'
+            : `Ver todos os ${merchants.length} estabelecimentos`}
+        </button>
       )}
 
       <Link to={`/extrato?categoria=${categoryId}`} className="section-link">
         Ver transações →
       </Link>
+    </div>
+  )
+}
+
+/**
+ * Card de um estabelecimento dentro da categoria.
+ * Fechado: nome, quantidade e total. Aberto: cada débito com data, descrição e
+ * valor, do mais recente para o mais antigo.
+ */
+function MerchantCard({ group }: { group: MerchantGroup }) {
+  const [open, setOpen] = useState(false)
+  const panelId = useId()
+
+  const transactions = useMemo(
+    () => [...group.transactions].sort((a, b) => b.date.localeCompare(a.date)),
+    [group.transactions],
+  )
+
+  return (
+    <div className={`merchant-card ${open ? 'is-open' : ''}`}>
+      <button
+        type="button"
+        className="merchant-card-head"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="merchant-card-name" title={group.merchant}>
+          {group.merchant}
+        </span>
+        <span className="merchant-card-meta">
+          {group.count}× · {formatBRL(group.total)}
+        </span>
+        <span className="merchant-card-toggle" aria-hidden="true">
+          {open ? '−' : '+'}
+        </span>
+      </button>
+
+      {open && (
+        <ul className="merchant-tx-list" id={panelId}>
+          {transactions.map((t) => (
+            <li key={t.id} className="merchant-tx">
+              <span className="merchant-tx-date">{formatDateBR(t.date)}</span>
+              <span className="merchant-tx-desc" title={t.description}>
+                {t.description || group.merchant}
+              </span>
+              <span className="merchant-tx-value">{formatBRL(t.amount)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

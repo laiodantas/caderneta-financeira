@@ -73,6 +73,8 @@ export interface MerchantGroup {
   categoryId: string
   total: number
   count: number
+  /** Lançamentos individuais do grupo, para detalhar em tela. */
+  transactions: Transaction[]
 }
 
 /** Agrupa transações por estabelecimento (dentro de uma categoria ou no geral). */
@@ -95,9 +97,11 @@ export function groupByMerchant(
       categoryId: t.category,
       total: 0,
       count: 0,
+      transactions: [],
     }
     g.total += t.amount
     g.count += 1
+    g.transactions.push(t)
     map.set(t.merchant, g)
   }
   return [...map.values()].sort((a, b) => b.total - a.total)
