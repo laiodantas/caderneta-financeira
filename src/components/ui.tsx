@@ -2,7 +2,7 @@
 // Componentes de UI compartilhados
 // ============================================================================
 
-import type { ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { formatBRL } from '../lib/format'
 
 /** Título de seção: serifado itálico + sublinhado "feito à mão". */
@@ -98,13 +98,41 @@ export function Modal({
   title: string
   children: ReactNode
 }) {
+  const titleId = useId()
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current()
+    }
+    document.addEventListener('keydown', onKey)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeRef.current?.focus()
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [open])
+
   if (!open) return null
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div className="modal-head">
-          <h3 className="modal-title">{title}</h3>
-          <button className="modal-close" onClick={onClose} aria-label="Fechar">
+          <h3 className="modal-title" id={titleId}>
+            {title}
+          </h3>
+          <button ref={closeRef} className="modal-close" onClick={onClose} aria-label="Fechar">
             ×
           </button>
         </div>

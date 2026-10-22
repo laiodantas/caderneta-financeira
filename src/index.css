@@ -543,6 +543,14 @@ button {
   flex-direction: column;
 }
 
+/* No desktop o card do donut mantém a mesma altura dos demais gráficos.
+   No celular ele cresce para caber a legenda inteira. */
+@media (min-width: 901px) {
+  .chart-card-auto .chart-body {
+    height: 260px !important;
+  }
+}
+
 .chart-card-head {
   display: flex;
   align-items: flex-start;
@@ -894,6 +902,16 @@ button {
   gap: 12px;
 }
 
+/* Cada categoria mantém a altura do próprio conteúdo: ao abrir um
+   estabelecimento, o card vizinho não é esticado com espaço vazio. */
+.categories-grid {
+  align-items: start;
+}
+
+.category-card > .section-link {
+  margin-top: auto;
+}
+
 .category-head {
   display: flex;
   align-items: center;
@@ -1014,9 +1032,11 @@ button {
   min-width: 0;
   font-weight: 700;
   font-size: 0.86rem;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .merchant-card-meta {
@@ -1416,6 +1436,111 @@ button {
 .row-btn:hover {
   color: var(--coral);
   background: var(--coral-soft);
+}
+
+/* Cartões do extrato no celular (a tabela fica só no desktop) */
+.tx-cards {
+  display: none;
+}
+
+.tx-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.tx-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 14px 10px;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tx-card-main:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: -2px;
+}
+
+.tx-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tx-card-date {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-card-value {
+  font-weight: 800;
+  font-size: 1.02rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-card-value.is-in {
+  color: #4f6f49;
+}
+
+.tx-card-value.is-out {
+  color: var(--navy);
+}
+
+.tx-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tx-card-merchant {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.tx-card-desc {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tx-card-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 14px;
+  padding: 8px 0 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.tx-card-foot .row-btn {
+  margin-left: auto;
+}
+
+.load-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.load-more-note {
+  font-size: 0.78rem;
 }
 
 /* ==========================================================================
@@ -1930,18 +2055,40 @@ textarea.input {
 
   .header-inner {
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
+    padding-top: 10px;
+    padding-bottom: 8px;
+  }
+
+  .logo {
+    gap: 8px;
+  }
+
+  .logo-word {
+    font-size: 1.35rem;
+  }
+
+  .logo-sub {
+    font-size: 0.55rem;
   }
 
   .nav {
     order: 3;
     width: 100%;
     margin-left: 0;
+    gap: 4px;
     overflow-x: auto;
     padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
   }
 
   .nav-pill {
+    padding: 7px 10px;
+    font-size: 0.8rem;
     white-space: nowrap;
   }
 
@@ -1982,19 +2129,105 @@ textarea.input {
   }
 
   .empty-hero-actions {
+    flex-direction: column;
+    width: 100%;
     justify-content: center;
   }
 
+  .empty-hero-actions .btn {
+    width: 100%;
+  }
+
   .filters {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .filters .search,
+  .filters .value-range {
+    grid-column: 1 / -1;
+  }
+
+  .value-range {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
   }
 
   .filters select,
   .filters .search,
-  .value-range,
   .value-range .input {
     width: 100%;
-    flex: 1;
+    min-width: 0;
+    flex: none;
+  }
+
+  /* Extrato: cartões em vez de tabela */
+  .extrato-table-card {
+    display: none;
+  }
+
+  .tx-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Prévia da importação: cada linha vira um cartão empilhado */
+  .preview-table {
+    min-width: 0;
+  }
+
+  .preview-table thead {
+    display: none;
+  }
+
+  .preview-table,
+  .preview-table tbody,
+  .preview-table tr,
+  .preview-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .preview-table tr {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: #fffdf7;
+  }
+
+  .preview-table td {
+    border: 0;
+    padding: 4px 0;
+  }
+
+  .preview-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+
+  .preview-table input,
+  .preview-table select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .preview-table .preview-remove-cell {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: auto;
+    padding: 0;
   }
 
   .demo-card,

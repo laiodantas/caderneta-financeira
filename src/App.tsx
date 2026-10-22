@@ -2,16 +2,27 @@
 // App: roteamento e layout global
 // ============================================================================
 
-import { Routes, Route } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { Header } from './components/Header'
 import { Dashboard } from './pages/Dashboard'
 import { Categorias } from './pages/Categorias'
 import { Extrato } from './pages/Extrato'
 import { Importar } from './pages/Importar'
 
+/** Sempre abre a página no topo, inclusive ao chegar por atalhos com filtro. */
+function ScrollToTop() {
+  const { pathname, search } = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname, search])
+  return null
+}
+
 export default function App() {
   return (
     <div className="app">
+      <ScrollToTop />
       <Header />
       <main className="main">
         <Routes>

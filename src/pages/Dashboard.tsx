@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useFinance } from '../context/FinanceContext'
 import { activeTransactions, totalsOf, groupByCategory, groupByMerchant, groupByMonth, balanceEvolution } from '../lib/aggregate'
 import { biggestExpense, avgDailySpend, mostExpensiveWeekday, endOfMonthProjection, compareMonths, recurringExpenses, anomalies, duplicates, smartSummary, repeatedCharges, installmentPlans, topCharges } from '../lib/insights'
@@ -18,6 +18,7 @@ import { ChartCard, DonutChart, MonthlyBarChart, BalanceLineChart } from '../com
 
 export function Dashboard() {
   const { transactions, statements, budgets, loadSample } = useFinance()
+  const navigate = useNavigate()
 
   const periods = useMemo(
     () => [...new Set(transactions.map((t) => t.date.slice(0, 7)))].sort().reverse(),
@@ -44,11 +45,26 @@ export function Dashboard() {
   const biggest = useMemo(() => biggestExpense(filtered), [filtered])
   const avgDaily = useMemo(() => avgDailySpend(filtered), [filtered])
   const weekday = useMemo(() => mostExpensiveWeekday(filtered), [filtered])
-  const proj = useMemo(() => endOfMonthProjection(filtered), [filtered])
-  const comparison = useMemo(() => compareMonths(active), [active])
+
+  const isAll = effectivePeriod === 'all'
+  const isCurrentMonth = !isAll && effectivePeriod === currentPeriod()
+
+  // A projeção só faz sentido no mês corrente; em meses passados o total já é final.
+  const proj = useMemo(
+    () => (isCurrentMonth ? endOfMonthProjection(filtered) : null),
+    [filtered, isCurrentMonth],
+  )
+  // Compara o mês selecionado com o anterior (não sempre os dois últimos do banco).
+  const comparison = useMemo(
+    () =>
+      isAll
+        ? null
+        : compareMonths(active.filter((t) => t.date.slice(0, 7) <= effectivePeriod)),
+    [active, effectivePeriod, isAll],
+  )
   const recurring = useMemo(() => recurringExpenses(active), [active])
-  const suspicious = useMemo(() => anomalies(active), [active])
-  const dups = useMemo(() => duplicates(active), [active])
+  const suspicious = useMemo(() => anomalies(filtered), [filtered])
+  const dups = useMemo(() => duplicates(filtered), [filtered])
   const summary = useMemo(() => smartSummary(filtered), [filtered])
 
   // Cobranças repetidas, parcelamentos e as 5 maiores cobranças.
@@ -60,8 +76,6 @@ export function Dashboard() {
     [statements],
   )
 
-  const isAll = effectivePeriod === 'all'
-  const isCurrentMonth = !isAll && effectivePeriod === currentPeriod()
   const totalBudget = useMemo(
     () => totalBudgetForPeriods(budgets, isAll ? periods : [effectivePeriod]),
     [budgets, isAll, periods, effectivePeriod],
@@ -163,7 +177,7 @@ export function Dashboard() {
 
       {/* Gráficos: rosca + barras */}
       <div className="grid-2">
-        <ChartCard title="Distribuição por categoria" subtitle="para onde foi seu dinheiro">
+        <ChartCard title="Distribuição por categoria" subtitle="para onde foi seu dinheiro" height="auto">
           <DonutChart
             data={categories.map((c) => ({ name: c.name, value: c.total, color: c.color }))}
           />
@@ -200,12 +214,18 @@ export function Dashboard() {
           )}
           {dups.length > 0 && (
             <span className="alert-item">
-              <Tag tone="coral">Duplicidade</Tag> {dups.length} possível(is) cobrança(s) repetida(s)
+              <Tag tone="coral">Duplicidade</Tag>{' '}
+              {dups.length === 1
+                ? '1 possível cobrança repetida'
+                : `${dups.length} possíveis cobranças repetidas`}
             </span>
           )}
           {recurring.length > 0 && (
             <span className="alert-item">
-              <Tag tone="blue">Recorrente</Tag> {recurring.length} gasto(s) que se repetem todo mês
+              <Tag tone="blue">Recorrente</Tag>{' '}
+              {recurring.length === 1
+                ? '1 gasto que se repete em mais de um mês'
+                : `${recurring.length} gastos que se repetem em mais de um mês`}
             </span>
           )}
         </div>
@@ -229,6 +249,7 @@ export function Dashboard() {
               title: m.merchant,
               subtitle: `${m.count} lançamento${m.count > 1 ? 's' : ''}`,
               value: formatBRL(m.total),
+              onClick: () => navigate(`/extrato?busca=${encodeURIComponent(m.merchant)}`),
             }))}
           />
         </div>
@@ -245,7 +266,9 @@ export function Dashboard() {
             <InsightCard label="Maior despesa" value={biggest ? formatBRL(biggest.amount) : '—'} detail={biggest?.merchant} />
             <InsightCard label="Média por dia" value={formatBRL(avgDaily)} />
             <InsightCard label="Dia mais caro" value={weekday.weekday} detail={formatBRL(weekday.total)} />
-            <InsightCard label="Projeção fim do mês" value={formatBRL(proj.projection)} detail={`${proj.daysLeft} dias restantes`} />
+            {proj && (
+              <InsightCard label="Projeção fim do mês" value={formatBRL(proj.projection)} detail={`${proj.daysLeft} dias restantes`} />
+            )}
             {totalBudget > 0 && (
               <InsightCard
                 label={isAll ? 'Orçamento do período' : 'Orçamento do mês'}
@@ -272,6 +295,7 @@ export function Dashboard() {
               subvalue: t.originalCurrency
                 ? `${t.originalAmount?.toFixed(2)} ${t.originalCurrency}`
                 : undefined,
+              onClick: () => navigate(`/extrato?busca=${encodeURIComponent(t.merchant)}`),
             }))}
           />
         </div>
@@ -288,13 +312,14 @@ export function Dashboard() {
           </SectionTitle>
           <RankedList
             emptyText="Nenhuma cobrança repetida neste período."
-            items={repeated.slice(0, 8).map((r) => ({
+            items={repeated.slice(0, 5).map((r) => ({
               id: r.merchant,
               title: r.merchant,
               subtitle: `${r.count}× · ${formatDates(r.dates)}`,
               tag: r.sameDay > 0 ? 'mesmo dia' : r.monthly ? 'mensal' : undefined,
               value: formatBRL(r.total),
               subvalue: `maior ${formatBRL(r.max)}`,
+              onClick: () => navigate(`/extrato?busca=${encodeURIComponent(r.merchant)}`),
             }))}
           />
         </div>

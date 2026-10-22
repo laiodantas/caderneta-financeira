@@ -223,9 +223,27 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const loadSample = useCallback(() => {
     const { statements: st, transactions: tx } = generateSampleData()
-    setStatements((prev) => [...st, ...prev])
-    setTransactions((prev) => [...tx, ...prev])
-  }, [])
+    // Evita empilhar cópias dos dados de exemplo a cada clique.
+    const sampleIds = new Set(
+      statements.filter((s) => s.label.startsWith('Demonstração')).map((s) => s.id),
+    )
+    if (sampleIds.size > 0) {
+      const ok = window.confirm(
+        'Os dados de exemplo já estão carregados. Deseja recarregá-los? Os lançamentos de exemplo atuais serão substituídos.',
+      )
+      if (!ok) return
+    } else if (transactions.length > 0) {
+      const ok = window.confirm(
+        'Já existem lançamentos na caderneta. Os dados de exemplo serão adicionados a eles. Deseja continuar?',
+      )
+      if (!ok) return
+    }
+    setStatements((prev) => [...st, ...prev.filter((s) => !sampleIds.has(s.id))])
+    setTransactions((prev) => [
+      ...tx,
+      ...prev.filter((t) => !sampleIds.has(t.statementId)),
+    ])
+  }, [statements, transactions])
 
   const clearAll = useCallback(() => {
     clearAllData()

@@ -20,10 +20,20 @@ import type { ReactNode } from 'react'
 import { formatBRL, periodLabel, periodShort, formatDateShort } from '../lib/format'
 import { SectionTitle } from './ui'
 
-/** Formato compacto para eixos: "R$ 1,2 mil". */
+/** Formato compacto para o centro do donut: "R$ 1,2 mil". */
 function shortBRL(v: number): string {
-  if (Math.abs(v) >= 1000) return `R$ ${(v / 1000).toFixed(1).replace('.', ',')}k`
+  if (Math.abs(v) >= 1000) return `R$ ${compactNumber(v)}`
   return `R$ ${Math.round(v)}`
+}
+
+/** Número compacto para eixos: "10k", "7,5k", "0", "-3k". */
+function compactNumber(v: number): string {
+  if (Math.abs(v) >= 1000) {
+    const n = v / 1000
+    const text = Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',')
+    return `${text}k`
+  }
+  return String(Math.round(v))
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -60,10 +70,10 @@ export function ChartCard({
   subtitle?: string
   legend?: { label: string; color: string }[]
   children: ReactNode
-  height?: number
+  height?: number | string
 }) {
   return (
-    <div className="card chart-card">
+    <div className={`card chart-card${height === 'auto' ? ' chart-card-auto' : ''}`}>
       <div className="chart-card-head">
         <SectionTitle as="h3">{title}</SectionTitle>
         {subtitle && <span className="chart-subtitle">{subtitle}</span>}
@@ -123,7 +133,7 @@ export function DonutChart({ data }: { data: DonutDatum[] }) {
         </div>
       </div>
       <ul className="donut-legend">
-        {data.slice(0, 8).map((d) => (
+        {data.slice(0, 10).map((d) => (
           <li key={d.name}>
             <span className="dot" style={{ background: d.color }} />
             <span className="dl-name">{d.name}</span>
@@ -156,10 +166,10 @@ export function MonthlyBarChart({ data }: { data: MonthDatum[] }) {
           tick={{ fill: '#6E7B8E', fontSize: 12 }}
         />
         <YAxis
-          tickFormatter={shortBRL}
+          tickFormatter={compactNumber}
           axisLine={false}
           tickLine={false}
-          width={52}
+          width={44}
           tick={{ fill: '#6E7B8E', fontSize: 11 }}
         />
         <Tooltip content={<ChartTooltip labelFormatter={(l: string) => periodLabel(l)} />} cursor={{ fill: 'rgba(30,42,74,0.04)' }} />
@@ -193,13 +203,13 @@ export function BalanceLineChart({ data }: { data: BalanceDatum[] }) {
           axisLine={false}
           tickLine={false}
           tick={{ fill: '#6E7B8E', fontSize: 11 }}
-          minTickGap={24}
+          minTickGap={40}
         />
         <YAxis
-          tickFormatter={shortBRL}
+          tickFormatter={compactNumber}
           axisLine={false}
           tickLine={false}
-          width={52}
+          width={44}
           tick={{ fill: '#6E7B8E', fontSize: 11 }}
         />
         <Tooltip content={<ChartTooltip labelFormatter={(l: string) => formatDateShort(l)} />} />

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Caderneta Financeira">
+  <rect width="64" height="64" rx="14" fill="#1E2A4A"/>
+  <rect x="17" y="12" width="30" height="40" rx="5" fill="#F6F0E1"/>
+  <path d="M24 22h16M24 30h16M24 38h10" stroke="#1E2A4A" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="46" cy="46" r="7" fill="#C74F3E"/>
+  <path d="M43 46l2 2 4-4" stroke="#F6F0E1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

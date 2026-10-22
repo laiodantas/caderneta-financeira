@@ -302,7 +302,7 @@ export function Importar() {
                 <tbody>
                   {preview.map((row, i) => (
                     <tr key={row.id}>
-                      <td>
+                      <td data-label="Data">
                         <input
                           className="input input-sm"
                           type="date"
@@ -312,7 +312,7 @@ export function Importar() {
                           onChange={(e) => updateRow(i, { date: e.target.value })}
                         />
                       </td>
-                      <td>
+                      <td data-label="Descrição">
                         <input
                           className="input input-sm"
                           value={row.description}
@@ -324,7 +324,7 @@ export function Importar() {
                           </span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="Tipo">
                         <select
                           className="input input-sm"
                           value={row.type}
@@ -334,7 +334,7 @@ export function Importar() {
                           <option value="entrada">Entrada</option>
                         </select>
                       </td>
-                      <td>
+                      <td data-label="Valor">
                         <input
                           className="input input-sm"
                           inputMode="decimal"
@@ -342,7 +342,7 @@ export function Importar() {
                           onChange={(e) => updateRow(i, { amountStr: e.target.value })}
                         />
                       </td>
-                      <td>
+                      <td data-label="Categoria">
                         <select
                           className="input input-sm"
                           value={row.category}
@@ -355,7 +355,7 @@ export function Importar() {
                           ))}
                         </select>
                       </td>
-                      <td>
+                      <td className="preview-remove-cell">
                         <button className="row-btn" aria-label="Remover" onClick={() => removeRow(i)}>
                           ✕
                         </button>

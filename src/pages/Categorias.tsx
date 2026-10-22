@@ -109,7 +109,7 @@ export function Categorias() {
 
       <UncategorizedQueue transactions={scoped} scopeLabel={scopeLabel} />
 
-      <div className="grid-2">
+      <div className="grid-2 categories-grid">
         {groups.map((g) => (
           <CategoryCard
             key={g.categoryId}
