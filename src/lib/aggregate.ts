@@ -99,7 +99,8 @@ export function groupByMerchant(
       count: 0,
       transactions: [],
     }
-    g.total += t.amount
+    const amount = Number(t.amount)
+    g.total += Number.isFinite(amount) ? amount : 0
     g.count += 1
     g.transactions.push(t)
     map.set(t.merchant, g)

@@ -916,12 +916,6 @@ button {
   flex: 1;
 }
 
-.category-pct {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-
 .category-total {
   display: flex;
   flex-direction: column;
@@ -939,32 +933,7 @@ button {
   color: var(--muted);
 }
 
-/* Orçamento */
-.budget {
-  min-height: 30px;
-}
-
-.budget-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.budget-label {
-  font-size: 0.78rem;
-  color: var(--muted);
-}
-
-.budget-edit {
-  background: none;
-  border: none;
-  color: var(--coral);
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0;
-}
-
+/* Barra de progresso (usada nos parcelamentos do Painel) */
 .budget-bar {
   height: 8px;
   background: rgba(30, 42, 74, 0.08);
@@ -976,79 +945,6 @@ button {
   height: 100%;
   border-radius: 999px;
   transition: width 400ms ease;
-}
-
-/* Estouro de orçamento: cor própria e listras, para não se confundir com a
-   cor da categoria (ex.: Restaurantes também é avermelhado). */
-.budget-fill.over {
-  background-color: var(--alert);
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.22) 0,
-    rgba(255, 255, 255, 0.22) 4px,
-    transparent 4px,
-    transparent 9px
-  );
-}
-
-.budget-warn {
-  display: block;
-  margin-top: 6px;
-  font-size: 0.75rem;
-  color: var(--alert);
-  font-weight: 700;
-}
-
-.budget-projection {
-  display: block;
-  margin-top: 6px;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.budget-projection.is-over {
-  color: var(--alert);
-  font-weight: 700;
-}
-
-.budget-reset {
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.category-card.is-empty {
-  background: rgba(255, 255, 255, 0.62);
-}
-
-.category-card.is-empty .category-total-value {
-  color: var(--muted-2);
-}
-
-.budget-add {
-  background: none;
-  border: 1px dashed rgba(30, 42, 74, 0.25);
-  color: var(--muted);
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 0.8rem;
-  transition: all 150ms ease;
-}
-
-.budget-add:hover {
-  border-color: var(--coral);
-  color: var(--coral);
-}
-
-.budget-edit-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.budget-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .page-top-actions {
@@ -2118,9 +2014,7 @@ textarea.input {
   .btn,
   .nav,
   .section-link,
-  .row-btn,
-  .budget-edit,
-  .budget-add {
+  .row-btn {
     display: none !important;
   }
 

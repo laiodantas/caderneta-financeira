@@ -7,9 +7,10 @@ const brl = new Intl.NumberFormat('pt-BR', {
   currency: 'BRL',
 })
 
-/** Formata um número como moeda brasileira: R$ 1.234,56 */
-export function formatBRL(value: number): string {
-  return brl.format(Number.isFinite(value) ? value : 0)
+/** Formata um valor como moeda brasileira: R$ 1.234,56 */
+export function formatBRL(value: number | string): string {
+  const n = typeof value === 'number' ? value : Number(value)
+  return brl.format(Number.isFinite(n) ? n : 0)
 }
 
 /** Formata sem o "R$", apenas o número: 1.234,56 */
