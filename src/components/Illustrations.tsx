@@ -43,11 +43,28 @@ export function NotebookIllustration({ className = '' }: { className?: string })
         opacity="0.95"
       />
       {/* Página (branca) */}
-      <rect x="42" y="34" width="196" height="140" rx="12" fill="#FFFFFF" stroke="#1E2A4A" strokeWidth="2.5" />
+      <rect
+        x="42"
+        y="34"
+        width="196"
+        height="140"
+        rx="12"
+        fill="#FFFFFF"
+        stroke="#1E2A4A"
+        strokeWidth="2.5"
+      />
 
       {/* Espiral (parte de cima) */}
       {Array.from({ length: 15 }).map((_, i) => (
-        <circle key={i} cx={52 + i * 13} cy={36} r={3} fill="none" stroke="#1E2A4A" strokeWidth="2" />
+        <circle
+          key={i}
+          cx={52 + i * 13}
+          cy={36}
+          r={3}
+          fill="none"
+          stroke="#1E2A4A"
+          strokeWidth="2"
+        />
       ))}
 
       {/* Margem vertical (coral, sutil) */}
@@ -60,8 +77,20 @@ export function NotebookIllustration({ className = '' }: { className?: string })
       })}
 
       {/* Rabisco de anotação (coral) */}
-      <path d="M84 82 q8 -5 16 0 t16 0 t16 0" stroke="#C74F3E" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-      <path d="M84 110 q8 -5 16 0 t16 0" stroke="#C74F3E" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+      <path
+        d="M84 82 q8 -5 16 0 t16 0 t16 0"
+        stroke="#C74F3E"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M84 110 q8 -5 16 0 t16 0"
+        stroke="#C74F3E"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        fill="none"
+      />
 
       {/* Fita marcadora (coral) saindo por baixo */}
       <path d="M150 172 L150 202 L166 190 L150 178 Z" fill="#C74F3E" />
@@ -75,7 +104,15 @@ export function NotebookIllustration({ className = '' }: { className?: string })
 
       {/* Moedas (canto inferior direito) */}
       <circle cx="216" cy="150" r="9" fill="#E8B04B" stroke="#1E2A4A" strokeWidth="1.5" />
-      <circle cx="206" cy="162" r="9" fill="#C74F3E" stroke="#1E2A4A" strokeWidth="1.5" opacity="0.9" />
+      <circle
+        cx="206"
+        cy="162"
+        r="9"
+        fill="#C74F3E"
+        stroke="#1E2A4A"
+        strokeWidth="1.5"
+        opacity="0.9"
+      />
     </svg>
   )
 }

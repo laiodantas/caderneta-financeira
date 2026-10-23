@@ -21,11 +21,18 @@ export interface ParseResult {
 export type ProgressFn = (msg: string) => void
 
 /** Lê um arquivo e devolve as transações cruas + banco detectado. */
-export async function parseFile(file: File, onProgress?: ProgressFn): Promise<ParseResult> {
+export async function parseFile(
+  file: File,
+  onProgress?: ProgressFn,
+  convention: 'account' | 'card' = 'account',
+  signal?: AbortSignal,
+): Promise<ParseResult> {
+  signal?.throwIfAborted()
+  if (file.size > 30 * 1024 * 1024) throw new Error('O arquivo deve ter no máximo 30 MB.')
   const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
 
   if (ext === 'pdf') {
-    const res = await parsePdf(file, onProgress)
+    const res = await parsePdf(file, onProgress, signal)
     return {
       bank: res.bank,
       transactions: res.transactions,
@@ -38,14 +45,15 @@ export async function parseFile(file: File, onProgress?: ProgressFn): Promise<Pa
 
   if (ext === 'csv') {
     const text = await file.text()
+    signal?.throwIfAborted()
     return {
       bank: detectBank(text),
-      transactions: parseCSV(text),
+      transactions: parseCSV(text, convention),
       source: 'csv',
     }
   }
 
-  if (ext === 'ofx' || ext === 'qif') {
+  if (ext === 'ofx') {
     const text = await file.text()
     return {
       bank: detectBank(text),
@@ -54,7 +62,5 @@ export async function parseFile(file: File, onProgress?: ProgressFn): Promise<Pa
     }
   }
 
-  throw new Error(
-    `Formato ".${ext}" não suportado. Envie um arquivo PDF, CSV ou OFX.`,
-  )
+  throw new Error(`Formato ".${ext}" não suportado. Envie um arquivo PDF, CSV ou OFX.`)
 }

@@ -119,7 +119,10 @@ export function normalizeDescription(raw: string): string {
   let s = cleanImportArtifacts(raw)
 
   // Remove sufixos de cidade/estado que costumam sujar o nome (ex.: "SAO PAULO").
-  s = s.replace(/\b(S(AO|ÃO)? PAULO|RIO DE JANEIRO|CURITIBA|BELO HORIZONTE|BRASILIA|BRASÍLIA|PORT[AO]? ALEGRE|RECIFE|SALVADOR|FORTALEZA|CAMPINAS)\b/gi, '')
+  s = s.replace(
+    /\b(S(AO|ÃO)? PAULO|RIO DE JANEIRO|CURITIBA|BELO HORIZONTE|BRASILIA|BRASÍLIA|PORT[AO]? ALEGRE|RECIFE|SALVADOR|FORTALEZA|CAMPINAS)\b/gi,
+    '',
+  )
 
   // Remove sequências de números longas (IDs de corrida, CPF, etc.).
   s = s.replace(/\b\d{4,}\b/g, '')
@@ -145,7 +148,10 @@ export function normalizeDescription(raw: string): string {
 
 /** Heurística de título de extrato a partir do nome do arquivo + período. */
 export function statementLabelFrom(fileName: string, bank: string, period: string): string {
-  const base = fileName.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim()
+  const base = fileName
+    .replace(/\.[^.]+$/, '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
   const month = period ? periodLabel(period) : ''
   const parts = [month, bank && bank !== 'Não identificado' ? `· ${bank}` : '']
     .filter(Boolean)

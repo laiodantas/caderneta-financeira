@@ -99,13 +99,31 @@ export function Modal({
   children: ReactNode
 }) {
   const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return
+    const previousFocus = document.activeElement as HTMLElement | null
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        const elements = [
+          ...(dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]',
+          ) ?? []),
+        ]
+        const first = elements[0],
+          last = elements[elements.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last?.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first?.focus()
+        }
+      }
       if (e.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('keydown', onKey)
@@ -115,6 +133,7 @@ export function Modal({
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = previousOverflow
+      previousFocus?.focus()
     }
   }, [open])
 
@@ -122,6 +141,7 @@ export function Modal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="modal"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -146,7 +166,14 @@ export function Modal({
 export function Chevron() {
   return (
     <svg className="chevron" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-      <path d="M6 3 L11 8 L6 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path
+        d="M6 3 L11 8 L6 13"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   )
 }

@@ -109,7 +109,7 @@ export function looksLikeFatura(pages: PdfPage[]): boolean {
  * colunas de valor ("R$ 96,30" + "USD 17,14"); nesse caso vale o primeiro.
  */
 function parseFirstMoney(text: string) {
-  const re = /(?:R\$\s*)?[-+]?\s*\(?\s*\d{1,3}(?:[.,]\d{3})*[.,]\d{2}\s*\)?(?:\s*[DC]\b)?/gi
+  const re = /(?:R\$\s*)?[-+]?\s*\(?\s*(?:\d{1,3}(?:[.,]\d{3})+|\d+)[.,]\d{2}\s*\)?(?:\s*[DC]\b)?/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
     const parsed = parseMoneyToken(m[0])

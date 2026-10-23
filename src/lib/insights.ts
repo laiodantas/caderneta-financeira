@@ -8,7 +8,15 @@ import { formatBRL } from './format'
 import { groupByMonth, groupByMerchant, pctChange } from './aggregate'
 import type { MerchantGroup } from './aggregate'
 
-const WEEKDAYS = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
+const WEEKDAYS = [
+  'domingo',
+  'segunda-feira',
+  'terça-feira',
+  'quarta-feira',
+  'quinta-feira',
+  'sexta-feira',
+  'sábado',
+]
 
 /** Maior despesa do conjunto. */
 export function biggestExpense(txs: Transaction[]): Transaction | null {
@@ -40,7 +48,11 @@ export function mostExpensiveWeekday(txs: Transaction[]): { weekday: string; tot
 }
 
 /** Projeção de fim de mês: média diária × dias restantes. */
-export function endOfMonthProjection(txs: Transaction[]): { spent: number; projection: number; daysLeft: number } {
+export function endOfMonthProjection(txs: Transaction[]): {
+  spent: number
+  projection: number
+  daysLeft: number
+} {
   const saidas = txs.filter((t) => t.type === 'saida')
   const spent = saidas.reduce((a, t) => a + t.amount, 0)
   const now = new Date()
@@ -59,13 +71,14 @@ export function recurringExpenses(txs: Transaction[]): MerchantGroup[] {
   const saidas = txs.filter((t) => t.type === 'saida')
   const months = new Set(saidas.map((t) => t.date.slice(0, 7)))
   if (months.size < 2) return []
+  const periodsByMerchant = new Map<string, Set<string>>()
+  for (const t of saidas) {
+    const periods = periodsByMerchant.get(t.merchant) ?? new Set<string>()
+    periods.add(t.date.slice(0, 7))
+    periodsByMerchant.set(t.merchant, periods)
+  }
   return groupByMerchant(saidas)
-    .filter((m) => {
-      const periods = new Set(
-        saidas.filter((t) => t.merchant === m.merchant).map((t) => t.date.slice(0, 7)),
-      )
-      return periods.size >= 2
-    })
+    .filter((m) => (periodsByMerchant.get(m.merchant)?.size ?? 0) >= 2)
     .slice(0, 8)
 }
 
@@ -152,11 +165,17 @@ export interface InstallmentPlan {
  * contar cada parcela como uma despesa nova.
  */
 export function installmentPlans(txs: Transaction[]): InstallmentPlan[] {
-  const parceladas = txs.filter((t) => t.installment)
+  const parceladas = txs.filter(
+    (t) => t.installment && t.type === 'saida' && t.status !== 'ignorar',
+  )
   const byPlan = new Map<string, Transaction[]>()
 
   for (const t of parceladas) {
-    const key = `${t.merchant}|${t.installment!.total}`
+    const date = new Date(`${t.date}T12:00:00`)
+    const originMonth = date.getFullYear() * 12 + date.getMonth() - t.installment!.current + 1
+    const key = t.installmentPlanId
+      ? `manual:${t.installmentPlanId}`
+      : `${t.bank ?? ''}|${t.merchant}|${t.description}|${t.amount.toFixed(2)}|${t.installment!.total}|${originMonth}`
     const arr = byPlan.get(key) ?? []
     arr.push(t)
     byPlan.set(key, arr)
@@ -180,8 +199,8 @@ export function installmentPlans(txs: Transaction[]): InstallmentPlan[] {
       installmentAmount,
       planTotal,
       paid,
-      remaining: Math.max(0, planTotal - paid),
-      progress: planTotal ? Math.min(100, (paid / planTotal) * 100) : 0,
+      remaining: Math.max(0, total - current) * installmentAmount,
+      progress: planTotal ? Math.min(100, (current / total) * 100) : 0,
       transactions: list,
     })
   }
@@ -206,11 +225,12 @@ export function anomalies(txs: Transaction[]): Transaction[] {
     arr.push(t.amount)
     byMerchant.set(t.merchant, arr)
   }
+  const medians = new Map([...byMerchant].map(([merchant, values]) => [merchant, medianOf(values)]))
   const result: Transaction[] = []
   for (const t of saidas) {
     const arr = byMerchant.get(t.merchant) ?? []
     if (arr.length < 2) continue
-    const median = medianOf(arr)
+    const median = medians.get(t.merchant) ?? 0
     if (median > 0 && t.amount > median * 2.5) result.push(t)
   }
   return result
@@ -226,7 +246,7 @@ function medianOf(arr: number[]): number {
 export function duplicates(txs: Transaction[]): Transaction[][] {
   const map = new Map<string, Transaction[]>()
   for (const t of txs) {
-    const key = `${t.merchant}|${t.date}|${t.amount.toFixed(2)}`
+    const key = `${t.type}|${t.merchant}|${t.date}|${t.amount.toFixed(2)}`
     const arr = map.get(key) ?? []
     arr.push(t)
     map.set(key, arr)
@@ -247,7 +267,10 @@ export function compareMonths(txs: Transaction[]): MonthComparison | null {
   const months = groupByMonth(txs)
   if (months.length < 1) return null
   const current = months[months.length - 1]
-  const previous = months.length > 1 ? months[months.length - 2] : null
+  const [year, month] = current.period.split('-').map(Number)
+  const prior = new Date(year, month - 2, 1)
+  const priorPeriod = `${prior.getFullYear()}-${String(prior.getMonth() + 1).padStart(2, '0')}`
+  const previous = months.find((m) => m.period === priorPeriod) ?? null
 
   const curOut = new Map<string, number>()
   const prevOut = new Map<string, number>()
@@ -255,7 +278,8 @@ export function compareMonths(txs: Transaction[]): MonthComparison | null {
     if (t.type !== 'saida') continue
     const period = t.date.slice(0, 7)
     if (period === current.period) curOut.set(t.category, (curOut.get(t.category) ?? 0) + t.amount)
-    else if (previous && period === previous.period) prevOut.set(t.category, (prevOut.get(t.category) ?? 0) + t.amount)
+    else if (previous && period === previous.period)
+      prevOut.set(t.category, (prevOut.get(t.category) ?? 0) + t.amount)
   }
 
   const byCategory = [...curOut.entries()]
@@ -290,7 +314,9 @@ export function smartSummary(txs: Transaction[]): string {
   parts.push(`No período, você gastou ${formatBRL(total)} no total.`)
 
   if (top.length) {
-    parts.push(`Os maiores gastos foram em ${top[0].merchant}${top[1] ? ` e ${top[1].merchant}` : ''}.`)
+    parts.push(
+      `Os maiores gastos foram em ${top[0].merchant}${top[1] ? ` e ${top[1].merchant}` : ''}.`,
+    )
   }
   if (biggest) {
     parts.push(`A maior despesa única foi ${formatBRL(biggest.amount)} (${biggest.merchant}).`)

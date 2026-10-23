@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useFinance } from '../context/FinanceContext'
 import { CATEGORIES, categoryColor, categoryName } from '../config/categories'
-import { formatBRL, formatDateBR, periodLabel } from '../lib/format'
+import { formatBRL, formatDateBR, periodLabel, parseAmountInput } from '../lib/format'
 import { normalizeForMatch } from '../lib/normalize'
 import { duplicates } from '../lib/insights'
 import { EmptyState } from '../components/ui'
@@ -61,8 +61,8 @@ export function Extrato() {
 
   const filtered = useMemo(() => {
     const q = normalizeForMatch(search)
-    const min = minVal ? parseFloat(minVal.replace(',', '.')) : null
-    const max = maxVal ? parseFloat(maxVal.replace(',', '.')) : null
+    const min = minVal ? parseAmountInput(minVal) : null
+    const max = maxVal ? parseAmountInput(maxVal) : null
 
     let list = transactions.filter((t) => {
       if (category !== 'all' && t.category !== category) return false
@@ -98,8 +98,12 @@ export function Extrato() {
   const visible = filtered.slice(0, visibleCount)
   const remaining = filtered.length - visible.length
 
-  const totalSaidas = filtered.filter((t) => t.type === 'saida').reduce((a, t) => a + t.amount, 0)
-  const totalEntradas = filtered.filter((t) => t.type === 'entrada').reduce((a, t) => a + t.amount, 0)
+  const totalSaidas = filtered
+    .filter((t) => t.type === 'saida' && t.status !== 'ignorar')
+    .reduce((a, t) => a + t.amount, 0)
+  const totalEntradas = filtered
+    .filter((t) => t.type === 'entrada' && t.status !== 'ignorar')
+    .reduce((a, t) => a + t.amount, 0)
 
   if (!transactions.length) {
     return (
@@ -123,8 +127,8 @@ export function Extrato() {
         <div>
           <h1 className="page-title">Extrato</h1>
           <p className="page-subtitle">
-            {filtered.length} registro{filtered.length === 1 ? '' : 's'} · saídas {formatBRL(totalSaidas)} ·
-            entradas {formatBRL(totalEntradas)}
+            {filtered.length} registro{filtered.length === 1 ? '' : 's'} · saídas{' '}
+            {formatBRL(totalSaidas)} · entradas {formatBRL(totalEntradas)} · totais sem ignoradas
           </p>
         </div>
       </div>
@@ -227,7 +231,16 @@ export function Extrato() {
                   <tr key={t.id} onClick={() => setEditing(t)}>
                     <td className="nowrap">{formatDateBR(t.date)}</td>
                     <td>
-                      <span className="td-merchant">{t.merchant}</span>
+                      <button
+                        className="merchant-edit"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditing(t)
+                        }}
+                        aria-label={`Editar lançamento de ${t.merchant}`}
+                      >
+                        {t.merchant}
+                      </button>
                       {t.merchant !== t.description && (
                         <span className="td-desc">{t.description}</span>
                       )}

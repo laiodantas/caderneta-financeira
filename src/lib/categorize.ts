@@ -19,7 +19,7 @@ function escapeRegex(text: string): string {
 
 /** Aplica regras aprendidas; retorna o id da categoria ou null. */
 function matchLearned(descNormalized: string, rules: LearnedRule[]): string | null {
-  for (const rule of rules) {
+  for (const rule of [...rules].reverse()) {
     const pattern = normalizeForMatch(rule.pattern)
     if (!pattern) continue
 

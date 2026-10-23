@@ -17,15 +17,45 @@ export interface BankProfile {
 }
 
 export const BANKS: BankProfile[] = [
-  { id: 'nubank', name: 'Nubank', hints: ['nubank', 'nu pagamentos'], extensions: ['pdf', 'csv', 'ofx'] },
-  { id: 'itau', name: 'Itaú', hints: ['itaú', 'itau', 'itaú unibanco'], extensions: ['pdf', 'csv', 'ofx'] },
+  {
+    id: 'nubank',
+    name: 'Nubank',
+    hints: ['nubank', 'nu pagamentos'],
+    extensions: ['pdf', 'csv', 'ofx'],
+  },
+  {
+    id: 'itau',
+    name: 'Itaú',
+    hints: ['itaú', 'itau', 'itaú unibanco'],
+    extensions: ['pdf', 'csv', 'ofx'],
+  },
   { id: 'bradesco', name: 'Bradesco', hints: ['bradesco'], extensions: ['pdf', 'csv', 'ofx'] },
   { id: 'santander', name: 'Santander', hints: ['santander'], extensions: ['pdf', 'csv', 'ofx'] },
-  { id: 'inter', name: 'Inter', hints: ['banco inter', 'inter&co'], extensions: ['pdf', 'csv', 'ofx'] },
-  { id: 'bb', name: 'Banco do Brasil', hints: ['banco do brasil'], extensions: ['pdf', 'csv', 'ofx'] },
-  { id: 'caixa', name: 'Caixa', hints: ['caixa econômica', 'caixa economica'], extensions: ['pdf', 'csv', 'ofx'] },
+  {
+    id: 'inter',
+    name: 'Inter',
+    hints: ['banco inter', 'inter&co'],
+    extensions: ['pdf', 'csv', 'ofx'],
+  },
+  {
+    id: 'bb',
+    name: 'Banco do Brasil',
+    hints: ['banco do brasil'],
+    extensions: ['pdf', 'csv', 'ofx'],
+  },
+  {
+    id: 'caixa',
+    name: 'Caixa',
+    hints: ['caixa econômica', 'caixa economica'],
+    extensions: ['pdf', 'csv', 'ofx'],
+  },
   { id: 'c6', name: 'C6 Bank', hints: ['c6 bank', 'c6bank'], extensions: ['pdf', 'csv', 'ofx'] },
-  { id: 'mercadopago', name: 'Mercado Pago', hints: ['mercado pago', 'mercadopago'], extensions: ['pdf', 'csv', 'ofx'] },
+  {
+    id: 'mercadopago',
+    name: 'Mercado Pago',
+    hints: ['mercado pago', 'mercadopago'],
+    extensions: ['pdf', 'csv', 'ofx'],
+  },
 ]
 
 /** Detecta o banco a partir do texto bruto do extrato. */

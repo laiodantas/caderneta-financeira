@@ -52,9 +52,9 @@ export function UncategorizedQueue({
       </SectionTitle>
 
       <p className="muted uncategorized-note">
-        {pending.length} lançamento{pending.length > 1 ? 's' : ''} em Extras ·{' '}
-        {formatBRL(total)} · {scopeLabel}. Ao escolher, a categoria também vira regra
-        para as próximas importações deste estabelecimento.
+        {pending.length} lançamento{pending.length > 1 ? 's' : ''} em Extras · {formatBRL(total)} ·{' '}
+        {scopeLabel}. Ao escolher, a categoria também vira regra para as próximas importações deste
+        estabelecimento.
       </p>
 
       <ul className="uncategorized-list">
@@ -91,7 +91,10 @@ export function UncategorizedQueue({
       </ul>
 
       {pending.length > 6 && (
-        <button className="btn btn-ghost btn-sm uncategorized-more" onClick={() => setExpanded((v) => !v)}>
+        <button
+          className="btn btn-ghost btn-sm uncategorized-more"
+          onClick={() => setExpanded((v) => !v)}
+        >
           {expanded ? 'Mostrar menos' : `Ver mais ${pending.length - 6}`}
         </button>
       )}

@@ -3,73 +3,65 @@
 // e confirmação. Inclui histórico de extratos e regras aprendidas.
 // ============================================================================
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useFinance } from '../context/FinanceContext'
 import { parseFile } from '../lib/parser'
-import { categorize, rawToTransaction } from '../lib/categorize'
+import { categorize } from '../lib/categorize'
 import { CATEGORIES } from '../config/categories'
 import { BANKS } from '../config/banks'
 import { statementLabelFrom } from '../lib/normalize'
-import { parseAmountInput, periodLabel, uid } from '../lib/format'
+import { periodLabel, uid } from '../lib/format'
+import { DataTools } from '../components/DataTools'
+import { validPreviewRow, type PreviewRow } from '../lib/importDraft'
+import { useDraftField, useImportDraft } from '../context/ImportDraftContext'
 import { SectionTitle, Tag } from '../components/ui'
 import { NotebookIllustration } from '../components/Illustrations'
-import type { RawTransaction, Transaction, PendingInstallment } from '../types'
-
-interface PreviewRow {
-  id: string
-  date: string
-  description: string
-  amountStr: string
-  type: 'entrada' | 'saida'
-  category: string
-  /** Texto usado na categorização (vem do parser). */
-  categoryHint?: string
-  /** Estabelecimento já resolvido pelo parser. */
-  merchant?: string
-  /** Compra no crédito parcelada (ex.: "Pix no crédito"). */
-  creditInstallment?: boolean
-  /** Valor na moeda original, quando o banco informou a conversão. */
-  originalAmount?: number
-  /** Moeda original do lançamento (ex.: "USD"). */
-  originalCurrency?: string
-  /** Parcela X de Y, quando a compra é parcelada. */
-  installment?: { current: number; total: number }
-}
+import type { RawTransaction } from '../types'
 
 export function Importar() {
-  const { rules, statements, transactions, commitImport, deleteStatement, deleteRule, loadSample, clearAll } =
+  const { rules, statements, transactions, deleteStatement, deleteRule, loadSample, clearAll } =
     useFinance()
   const navigate = useNavigate()
+  const { saveDraft, error: draftError, setError: setDraftError } = useImportDraft()
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const processingRef = useRef(false)
+  const abortRef = useRef<AbortController | null>(null)
+  useEffect(() => () => abortRef.current?.abort(), [])
+  const [convention, setConvention] = useState<'account' | 'card'>('account')
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
 
-  const [fileName, setFileName] = useState('')
-  const [bank, setBank] = useState('')
-  const [period, setPeriod] = useState('')
-  const [label, setLabel] = useState('')
-  const [source, setSource] = useState<'pdf' | 'csv' | 'ofx'>('pdf')
-  const [ocrUsed, setOcrUsed] = useState(false)
-  const [preview, setPreview] = useState<PreviewRow[]>([])
-  const [pending, setPending] = useState<PendingInstallment[]>([])
+  const [, setFileName] = useDraftField('fileName')
+  const [bank, setBank] = useDraftField('bank')
+  const [period, setPeriod] = useDraftField('period')
+  const [label, setLabel] = useDraftField('label')
+  const [source, setSource] = useDraftField('source')
+  const [ocrUsed, setOcrUsed] = useDraftField('ocrUsed')
+  const [preview, setPreview] = useDraftField('preview')
+  const [pending, setPending] = useDraftField('pending')
   const [imported, setImported] = useState<string | null>(null)
 
   const missingDates = preview.filter((row) => !row.date).length
-  const canImport = preview.length > 0 && missingDates === 0
+  const validRow = validPreviewRow
+  const canImport = preview.length > 0 && preview.every(validRow)
 
   async function handleFile(file: File) {
+    if (processingRef.current) return
+    processingRef.current = true
+    abortRef.current = new AbortController()
     setError(null)
+    setDraftError('')
     setImported(null)
     setBusy(true)
     setProgress('Lendo o arquivo…')
     setPreview([])
 
     try {
-      const res = await parseFile(file, setProgress)
+      const res = await parseFile(file, setProgress, convention, abortRef.current.signal)
       const rows: PreviewRow[] = res.transactions.map((raw) => ({
         id: uid(),
         date: raw.date,
@@ -103,58 +95,27 @@ export function Importar() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não foi possível ler o arquivo.')
     } finally {
+      processingRef.current = false
       setBusy(false)
+      if (inputRef.current) inputRef.current.value = ''
     }
   }
 
   function confirmImport() {
     if (!preview.length) return
-    if (preview.some((row) => !row.date)) {
-      setError('Preencha a data de todos os lançamentos antes de confirmar a importação.')
+    if (!canImport) {
+      setError(
+        'Revise todas as linhas: data válida, descrição e valor maior que zero são obrigatórios.',
+      )
       return
     }
 
     setError(null)
-    const txs: Transaction[] = []
-    for (const row of preview) {
-      const amount = parseAmountInput(row.amountStr)
-      if (amount == null || amount <= 0) continue
-      if (!row.description.trim()) continue
-      const tx = rawToTransaction(
-        {
-          date: row.date,
-          description: row.description,
-          amount,
-          type: row.type,
-          merchant: row.merchant,
-          categoryHint: row.categoryHint,
-          creditInstallment: row.creditInstallment,
-          originalAmount: row.originalAmount,
-          originalCurrency: row.originalCurrency,
-          installment: row.installment,
-        },
-        '',
-        bank,
-        rules,
-      )
-      // Respeita a escolha do usuário na pré-visualização e a protege da recategorização.
-      if (row.category !== tx.category) {
-        tx.category = row.category
-        tx.categorySource = 'manual'
-      }
-      txs.push(tx)
+    try {
+      setImported(saveDraft())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao importar.')
     }
-
-    commitImport({
-      label: label || statementLabelFrom(fileName, bank, period),
-      bank,
-      period,
-      fileName,
-      transactions: txs,
-      pendingInstallments: pending,
-    })
-    setImported(label || fileName)
-    setPreview([])
   }
 
   function reset() {
@@ -179,11 +140,23 @@ export function Importar() {
       <div className="privacy-note">
         <span className="privacy-icon">🔒</span>
         <span>
-          Tudo é processado <strong>localmente no seu navegador</strong>. Seus dados bancários
-          nunca são enviados para servidores externos.
+          Tudo é processado <strong>localmente no seu navegador</strong>. Seus dados bancários nunca
+          são enviados para servidores externos.
         </span>
       </div>
 
+      <label className="field">
+        Tipo do CSV
+        <select
+          className="input"
+          value={convention}
+          disabled={busy || preview.length > 0}
+          onChange={(e) => setConvention(e.target.value as typeof convention)}
+        >
+          <option value="account">Conta: positivo é entrada, negativo é saída</option>
+          <option value="card">Cartão: valores positivos são despesas</option>
+        </select>
+      </label>
       {/* Upload */}
       {!preview.length && (
         <div
@@ -204,7 +177,8 @@ export function Importar() {
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.csv,.ofx,.qif"
+            accept=".pdf,.csv,.ofx"
+            disabled={busy}
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0]
@@ -213,9 +187,7 @@ export function Importar() {
           />
           <NotebookIllustration className="upload-illustration" />
           <h2 className="upload-title">Jogue seu extrato aqui</h2>
-          <p className="upload-desc">
-            Arraste e solte ou clique para escolher um arquivo.
-          </p>
+          <p className="upload-desc">Arraste e solte ou clique para escolher um arquivo.</p>
           <button className="btn btn-primary" type="button">
             Escolher arquivo
           </button>
@@ -226,11 +198,19 @@ export function Importar() {
       {/* Progresso */}
       {busy && (
         <div className="card progress-card">
+          <button className="btn btn-ghost" onClick={() => abortRef.current?.abort()}>
+            Cancelar leitura
+          </button>
           <div className="spinner" />
           <span>{progress || 'Processando…'}</span>
         </div>
       )}
 
+      {draftError && (
+        <div className="error-box" role="alert">
+          {draftError}
+        </div>
+      )}
       {/* Erro */}
       {error && (
         <div className="error-box">
@@ -271,20 +251,46 @@ export function Importar() {
             <div className="meta-info">
               {source.toUpperCase()} · {preview.length} transações{' '}
               {ocrUsed && <Tag tone="blue">OCR usado</Tag>}
-              {pending.length > 0 && (
-                <Tag tone="green">{pending.length} parcelas a cobrar</Tag>
-              )}
+              {pending.length > 0 && <Tag tone="green">{pending.length} parcelas a cobrar</Tag>}
             </div>
           </div>
 
           {missingDates > 0 && (
             <div className="error-box" role="alert">
               <strong>Faltam datas.</strong> {missingDates} lançamento
-              {missingDates > 1 ? 's estão' : ' está'} sem data. Preencha a coluna Data
-              na tabela abaixo para poder importar.
+              {missingDates > 1 ? 's estão' : ' está'} sem data. Preencha a coluna Data na tabela
+              abaixo para poder importar.
             </div>
           )}
 
+          {!canImport && (
+            <p role="alert" className="error-box">
+              Corrija as linhas destacadas: data válida, descrição e valor maior que zero.
+            </p>
+          )}
+          <div className="card import-review-banner" role="status">
+            <div>
+              <strong>{preview.length} lançamentos prontos para importar</strong>
+              <p>
+                Ao abrir Categorias, Painel ou Extrato, a revisão válida será salva automaticamente.
+                Você também pode revisar e confirmar abaixo.
+              </p>
+            </div>
+            <button
+              className="btn btn-primary"
+              disabled={!canImport}
+              onClick={() => {
+                try {
+                  saveDraft()
+                  navigate('/categorias')
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : 'Falha ao importar.')
+                }
+              }}
+            >
+              Salvar e ver categorias
+            </button>
+          </div>
           <SectionTitle>Revise antes de confirmar</SectionTitle>
           <div className="card table-card">
             <div className="table-scroll">
@@ -301,10 +307,11 @@ export function Importar() {
                 </thead>
                 <tbody>
                   {preview.map((row, i) => (
-                    <tr key={row.id}>
+                    <tr key={row.id} className={!validRow(row) ? 'invalid-row' : undefined}>
                       <td data-label="Data">
                         <input
                           className="input input-sm"
+                          aria-label={`Data do lançamento ${i + 1}`}
                           type="date"
                           required
                           aria-invalid={!row.date}
@@ -315,6 +322,7 @@ export function Importar() {
                       <td data-label="Descrição">
                         <input
                           className="input input-sm"
+                          aria-label={`Descrição do lançamento ${i + 1}`}
                           value={row.description}
                           onChange={(e) => updateRow(i, { description: e.target.value })}
                         />
@@ -327,8 +335,11 @@ export function Importar() {
                       <td data-label="Tipo">
                         <select
                           className="input input-sm"
+                          aria-label={`Tipo do lançamento ${i + 1}`}
                           value={row.type}
-                          onChange={(e) => updateRow(i, { type: e.target.value as 'entrada' | 'saida' })}
+                          onChange={(e) =>
+                            updateRow(i, { type: e.target.value as 'entrada' | 'saida' })
+                          }
                         >
                           <option value="saida">Saída</option>
                           <option value="entrada">Entrada</option>
@@ -338,6 +349,7 @@ export function Importar() {
                         <input
                           className="input input-sm"
                           inputMode="decimal"
+                          aria-label={`Valor do lançamento ${i + 1}`}
                           value={row.amountStr}
                           onChange={(e) => updateRow(i, { amountStr: e.target.value })}
                         />
@@ -345,6 +357,7 @@ export function Importar() {
                       <td data-label="Categoria">
                         <select
                           className="input input-sm"
+                          aria-label={`Categoria do lançamento ${i + 1}`}
                           value={row.category}
                           onChange={(e) => updateRow(i, { category: e.target.value })}
                         >
@@ -356,7 +369,11 @@ export function Importar() {
                         </select>
                       </td>
                       <td className="preview-remove-cell">
-                        <button className="row-btn" aria-label="Remover" onClick={() => removeRow(i)}>
+                        <button
+                          className="row-btn"
+                          aria-label="Remover"
+                          onClick={() => removeRow(i)}
+                        >
                           ✕
                         </button>
                       </td>
@@ -409,7 +426,9 @@ export function Importar() {
                   <div className="history-main">
                     <span className="history-label">{s.label}</span>
                     <span className="history-detail">
-                      {periodLabel(s.period)} · {s.transactionCount} lançamentos · {s.bank}
+                      {periodLabel(s.period)} ·{' '}
+                      {transactions.filter((t) => t.statementId === s.id).length} lançamentos ·{' '}
+                      {s.bank}
                     </span>
                   </div>
                   <button
@@ -440,8 +459,14 @@ export function Importar() {
                 <li key={r.id} className="rules-row">
                   <span className="rules-pattern">“{r.pattern}”</span>
                   <span className="rules-arrow">→</span>
-                  <span className="rules-cat">{CATEGORIES.find((c) => c.id === r.categoryId)?.name ?? r.categoryId}</span>
-                  <button className="row-btn" aria-label="Remover regra" onClick={() => deleteRule(r.id)}>
+                  <span className="rules-cat">
+                    {CATEGORIES.find((c) => c.id === r.categoryId)?.name ?? r.categoryId}
+                  </span>
+                  <button
+                    className="row-btn"
+                    aria-label="Remover regra"
+                    onClick={() => deleteRule(r.id)}
+                  >
                     ✕
                   </button>
                 </li>
@@ -451,6 +476,7 @@ export function Importar() {
         </div>
       </div>
 
+      <DataTools />
       {/* Dados de exemplo / limpar */}
       <div className="card section-gap demo-card">
         <div>
@@ -465,7 +491,8 @@ export function Importar() {
             <button
               className="btn btn-danger-ghost"
               onClick={() => {
-                if (confirm('Apagar TODOS os dados da caderneta? Essa ação não pode ser desfeita.')) clearAll()
+                if (confirm('Apagar TODOS os dados da caderneta? Essa ação não pode ser desfeita.'))
+                  clearAll()
               }}
             >
               Apagar tudo

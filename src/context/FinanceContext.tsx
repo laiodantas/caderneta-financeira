@@ -14,23 +14,16 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type {
-  Statement,
-  Transaction,
-  LearnedRule,
-  BudgetMap,
-  PendingInstallment,
-} from '../types'
+import type { Statement, Transaction, LearnedRule, BudgetMap, PendingInstallment } from '../types'
 import {
   loadStatements,
-  saveStatements,
   loadTransactions,
-  saveTransactions,
   loadRules,
-  saveRules,
   loadBudgets,
-  saveBudgets,
   clearAllData,
+  saveSnapshot,
+  validateSnapshot,
+  type Snapshot,
 } from '../lib/storage'
 import { buildRuleFrom, categoryForSaved } from '../lib/categorize'
 import { cleanImportArtifacts } from '../lib/normalize'
@@ -70,6 +63,7 @@ interface FinanceContextValue {
   deleteStatement: (id: string) => void
   loadSample: () => void
   clearAll: () => void
+  restoreBackup: (raw: unknown) => void
 }
 
 const FinanceContext = createContext<FinanceContextValue | null>(null)
@@ -81,13 +75,40 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const [budgets, setBudgets] = useState<BudgetMap>(() => loadBudgets())
 
   // Persistência automática.
-  useEffect(() => saveStatements(statements), [statements])
-  useEffect(() => saveTransactions(transactions), [transactions])
-  useEffect(() => saveRules(rules), [rules])
-  useEffect(() => saveBudgets(budgets), [budgets])
+  useEffect(() => {
+    try {
+      saveSnapshot({ version: 2, statements, transactions, rules, budgets })
+    } catch {
+      /* aviso global visível */
+    }
+  }, [statements, transactions, rules, budgets])
+  const restoreBackup = useCallback((raw: unknown) => {
+    const data: Snapshot = validateSnapshot(raw)
+    saveSnapshot(data, true)
+    setStatements(data.statements)
+    setTransactions(data.transactions)
+    setRules(data.rules)
+    setBudgets(data.budgets)
+  }, [])
 
   const commitImport = useCallback(
     (payload: CommitPayload): Statement => {
+      if (!payload.transactions.length) throw new Error('O extrato está vazio.')
+      if (
+        payload.transactions.some((t) =>
+          transactions.some(
+            (old) =>
+              old.date === t.date &&
+              old.description === t.description &&
+              old.amount === t.amount &&
+              old.type === t.type &&
+              old.bank === payload.bank,
+          ),
+        )
+      )
+        throw new Error(
+          'Há lançamentos já importados neste arquivo. Remova o extrato anterior ou revise as linhas repetidas antes de importar.',
+        )
       const statementId = uid()
       const statement: Statement = {
         id: statementId,
@@ -103,11 +124,18 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       // Garante que todas as transações apontem para este extrato.
       const txs = payload.transactions.map((t) => ({ ...t, statementId }))
 
+      saveSnapshot({
+        version: 2,
+        statements: [statement, ...statements],
+        transactions: [...txs, ...transactions],
+        rules,
+        budgets,
+      })
       setStatements((prev) => [statement, ...prev])
       setTransactions((prev) => [...txs, ...prev])
       return statement
     },
-    [],
+    [statements, transactions, rules, budgets],
   )
 
   const updateTransaction = useCallback((id: string, patch: Partial<Transaction>) => {
@@ -154,9 +182,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (tx) {
           const rule = buildRuleFrom(tx.description, categoryId)
           setRules((prev) => {
-            const exists = prev.some((r) => r.id === rule.id)
-            if (exists) return prev
-            return [...prev, rule]
+            return [...prev.filter((r) => r.pattern !== rule.pattern), rule]
           })
         }
       }
@@ -167,8 +193,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const addRule = useCallback((pattern: string, categoryId: string) => {
     const rule = buildRuleFrom(pattern, categoryId)
     setRules((prev) => {
-      if (prev.some((r) => r.id === rule.id)) return prev
-      return [...prev, rule]
+      return [...prev.filter((r) => r.pattern !== rule.pattern), rule]
     })
   }, [])
 
@@ -176,23 +201,20 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setRules((prev) => prev.filter((r) => r.id !== id))
   }, [])
 
-  const setBudget = useCallback(
-    (categoryId: string, amount: number, period?: string) => {
-      setBudgets((prev) => {
-        const current = prev[categoryId] ?? { months: {} }
-        if (period) {
-          // Valor próprio do mês (não altera os outros meses).
-          return {
-            ...prev,
-            [categoryId]: { ...current, months: { ...current.months, [period]: amount } },
-          }
+  const setBudget = useCallback((categoryId: string, amount: number, period?: string) => {
+    setBudgets((prev) => {
+      const current = prev[categoryId] ?? { months: {} }
+      if (period) {
+        // Valor próprio do mês (não altera os outros meses).
+        return {
+          ...prev,
+          [categoryId]: { ...current, months: { ...current.months, [period]: amount } },
         }
-        // Valor padrão, usado por qualquer mês sem valor próprio.
-        return { ...prev, [categoryId]: { ...current, base: amount } }
-      })
-    },
-    [],
-  )
+      }
+      // Valor padrão, usado por qualquer mês sem valor próprio.
+      return { ...prev, [categoryId]: { ...current, base: amount } }
+    })
+  }, [])
 
   const clearBudget = useCallback((categoryId: string, period?: string) => {
     setBudgets((prev) => {
@@ -239,10 +261,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       if (!ok) return
     }
     setStatements((prev) => [...st, ...prev.filter((s) => !sampleIds.has(s.id))])
-    setTransactions((prev) => [
-      ...tx,
-      ...prev.filter((t) => !sampleIds.has(t.statementId)),
-    ])
+    setTransactions((prev) => [...tx, ...prev.filter((t) => !sampleIds.has(t.statementId))])
   }, [statements, transactions])
 
   const clearAll = useCallback(() => {
@@ -271,6 +290,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       deleteStatement,
       loadSample,
       clearAll,
+      restoreBackup,
     }),
     [
       statements,

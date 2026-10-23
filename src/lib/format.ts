@@ -26,8 +26,11 @@ export function formatNumber(value: number): string {
  * Aceita "1.234,56", "1234,56", "1234.56" e "1.234".
  */
 export function parseAmountInput(raw: string): number | null {
-  const s = raw.trim().replace(/R\$\s*/gi, '').replace(/\s/g, '')
-  if (!s) return null
+  const s = raw
+    .trim()
+    .replace(/R\$\s*/gi, '')
+    .replace(/\s/g, '')
+  if (!s || !/^[+-]?(?:\d{1,3}(?:\.\d{3})+|\d+)(?:[,.]\d{1,2})?$/.test(s)) return null
 
   if (s.includes(',')) {
     const n = parseFloat(s.replace(/\./g, '').replace(',', '.'))
@@ -53,14 +56,24 @@ export function formatDateBR(iso: string): string {
 
 /** Converte `yyyy-mm-dd` em `dd/mm`. */
 export function formatDateShort(iso: string): string {
-  const [y, m, d] = iso.split('-')
+  const [, m, d] = iso.split('-')
   if (!m || !d) return iso
   return `${d}/${m}`
 }
 
 const MONTHS = [
-  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
 ]
 
 /** `yyyy-mm` → `outubro de 2026` */

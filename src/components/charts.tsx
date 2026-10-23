@@ -172,8 +172,17 @@ export function MonthlyBarChart({ data }: { data: MonthDatum[] }) {
           width={44}
           tick={{ fill: '#6E7B8E', fontSize: 11 }}
         />
-        <Tooltip content={<ChartTooltip labelFormatter={(l: string) => periodLabel(l)} />} cursor={{ fill: 'rgba(30,42,74,0.04)' }} />
-        <Bar dataKey="entradas" name="Entradas" fill="#1E2A4A" radius={[6, 6, 0, 0]} maxBarSize={26} />
+        <Tooltip
+          content={<ChartTooltip labelFormatter={(l: string) => periodLabel(l)} />}
+          cursor={{ fill: 'rgba(30,42,74,0.04)' }}
+        />
+        <Bar
+          dataKey="entradas"
+          name="Entradas"
+          fill="#1E2A4A"
+          radius={[6, 6, 0, 0]}
+          maxBarSize={26}
+        />
         <Bar dataKey="saidas" name="Saídas" fill="#C74F3E" radius={[6, 6, 0, 0]} maxBarSize={26} />
       </BarChart>
     </ResponsiveContainer>

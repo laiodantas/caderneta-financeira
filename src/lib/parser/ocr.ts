@@ -10,6 +10,7 @@ type TesseractModule = typeof import('tesseract.js')
 export async function ocrCanvases(
   canvases: HTMLCanvasElement[],
   onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   const tesseract = (await import('tesseract.js')) as TesseractModule
 
@@ -21,12 +22,22 @@ export async function ocrCanvases(
     },
   })
 
-  let text = ''
-  for (const canvas of canvases) {
-    const { data } = await worker.recognize(canvas)
-    text += data.text + '\n'
+  const abort = () => {
+    void worker.terminate()
   }
+  signal?.addEventListener('abort', abort, { once: true })
+  try {
+    signal?.throwIfAborted()
+    let text = ''
+    for (const canvas of canvases) {
+      signal?.throwIfAborted()
+      const { data } = await worker.recognize(canvas)
+      text += data.text + '\n'
+    }
 
-  await worker.terminate()
-  return text
+    return text
+  } finally {
+    signal?.removeEventListener('abort', abort)
+    await worker.terminate()
+  }
 }

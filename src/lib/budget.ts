@@ -10,7 +10,7 @@ import type { BudgetMap, CategoryBudget } from '../types'
 import { CATEGORIES, CATEGORY_MAP } from '../config/categories'
 
 /** Categorias que não representam gasto e por isso não entram no total. */
-const NON_SPENDING = new Set(['extras', 'renda'])
+const NON_SPENDING = new Set(['renda', 'pix_recebido'])
 
 export function emptyBudget(): CategoryBudget {
   return { months: {} }
@@ -26,7 +26,7 @@ export function normalizeBudgetMap(raw: unknown): BudgetMap {
   const out: BudgetMap = {}
 
   for (const [categoryId, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof value === 'number' && Number.isFinite(value)) {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
       // Formato antigo: { transporte: 500 }
       out[categoryId] = { base: value, months: {} }
       continue
@@ -37,11 +37,14 @@ export function normalizeBudgetMap(raw: unknown): BudgetMap {
     const months: Record<string, number> = {}
     if (obj.months && typeof obj.months === 'object') {
       for (const [period, amount] of Object.entries(obj.months)) {
-        if (typeof amount === 'number' && Number.isFinite(amount)) months[period] = amount
+        if (typeof amount === 'number' && Number.isFinite(amount) && amount >= 0)
+          months[period] = amount
       }
     }
     const base =
-      typeof obj.base === 'number' && Number.isFinite(obj.base) ? obj.base : undefined
+      typeof obj.base === 'number' && Number.isFinite(obj.base) && obj.base >= 0
+        ? obj.base
+        : undefined
     out[categoryId] = { base, months }
   }
 
@@ -59,11 +62,7 @@ export function hasBaseOverride(budgets: BudgetMap, categoryId: string): boolean
 }
 
 /** O usuário já definiu um valor próprio para este mês? */
-export function hasMonthOverride(
-  budgets: BudgetMap,
-  categoryId: string,
-  period: string,
-): boolean {
+export function hasMonthOverride(budgets: BudgetMap, categoryId: string, period: string): boolean {
   return budgets[categoryId]?.months[period] !== undefined
 }
 
@@ -83,11 +82,7 @@ export function budgetBase(budgets: BudgetMap, categoryId: string): number {
 }
 
 /** Orçamento de um mês específico (`yyyy-mm`), com todos os fallbacks. */
-export function budgetForMonth(
-  budgets: BudgetMap,
-  categoryId: string,
-  period: string,
-): number {
+export function budgetForMonth(budgets: BudgetMap, categoryId: string, period: string): number {
   const budget = budgets[categoryId]
   if (budget?.months[period] !== undefined) return budget.months[period]
   if (budget?.base !== undefined) return budget.base
@@ -136,7 +131,13 @@ export function projectionForPeriod(
   const daysInMonth = validMonth ? new Date(year, month, 0).getDate() : 30
 
   if (period !== currentPeriod) {
-    return { isCurrent: false, daysInMonth, elapsedDays: daysInMonth, daysLeft: 0, projection: spent }
+    return {
+      isCurrent: false,
+      daysInMonth,
+      elapsedDays: daysInMonth,
+      daysLeft: 0,
+      projection: spent,
+    }
   }
 
   const elapsedDays = Math.min(now.getDate(), daysInMonth)

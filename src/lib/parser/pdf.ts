@@ -6,7 +6,7 @@
 // falha da biblioteca derrube a aplicação inteira.
 // ============================================================================
 
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.js?url'
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import type { RawTransaction, PendingInstallment } from '../../types'
 import { extractFromText } from './text'
 import { ocrCanvases } from './ocr'
@@ -54,7 +54,12 @@ function itemsToLines(items: PdfTextItem[]): string[] {
   }
   return [...lines.entries()]
     .sort((a, b) => b[0] - a[0]) // y decrescente = de cima para baixo
-    .map(([, arr]) => arr.sort((a, b) => a.x - b.x).map((i) => i.text).join(' '))
+    .map(([, arr]) =>
+      arr
+        .sort((a, b) => a.x - b.x)
+        .map((i) => i.text)
+        .join(' '),
+    )
 }
 
 /**
@@ -93,41 +98,62 @@ export async function extractPdfText(file: File): Promise<PdfTextResult> {
 }
 
 /** Extrai as páginas do PDF com posição de cada trecho de texto. */
-export async function extractPdfPages(file: File): Promise<PdfPage[]> {
+export async function extractPdfPages(
+  file: File,
+  onProgress?: (msg: string) => void,
+  signal?: AbortSignal,
+): Promise<(PdfPage & { ocr?: boolean })[]> {
   const pdfjs = await loadPdfjs()
-  const data = await file.arrayBuffer()
-  const pdf = await pdfjs.getDocument({ data }).promise
-
-  const pages: PdfPage[] = []
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i)
-    const content = await page.getTextContent()
-    const items = content.items as unknown as PdfTextItem[]
-    pages.push({
-      rows: itemsToRows(items),
-      text: itemsToLines(items).join('\n'),
-    })
+  // Nesta versão corrigida não existe mais a opção isEvalSupported.
+  const task = pdfjs.getDocument({ data: await file.arrayBuffer(), enableXfa: false })
+  const abort = () => {
+    void task.destroy()
   }
-  return pages
-}
-
-/** Renderiza páginas do PDF em canvas (para OCR). */
-export async function renderPdfPages(file: File, scale = 2): Promise<HTMLCanvasElement[]> {
-  const pdfjs = await loadPdfjs()
-  const data = await file.arrayBuffer()
-  const pdf = await pdfjs.getDocument({ data }).promise
-  const canvases: HTMLCanvasElement[] = []
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i)
-    const viewport = page.getViewport({ scale })
-    const canvas = document.createElement('canvas')
-    canvas.width = viewport.width
-    canvas.height = viewport.height
-    const ctx = canvas.getContext('2d')!
-    await page.render({ canvasContext: ctx, viewport }).promise
-    canvases.push(canvas)
+  signal?.addEventListener('abort', abort, { once: true })
+  try {
+    const pdf = await task.promise
+    if (pdf.numPages > 100) throw new Error('O PDF deve ter no máximo 100 páginas.')
+    const pages: (PdfPage & { ocr?: boolean })[] = []
+    for (let i = 1; i <= pdf.numPages; i++) {
+      signal?.throwIfAborted()
+      onProgress?.(`Lendo página ${i} de ${pdf.numPages}…`)
+      const page = await pdf.getPage(i)
+      try {
+        const content = await page.getTextContent()
+        const items = content.items.filter((item) => 'str' in item) as unknown as PdfTextItem[]
+        const text = itemsToLines(items).join('\n')
+        if (text.replace(/\s/g, '').length >= 40) {
+          pages.push({ rows: itemsToRows(items), text })
+        } else {
+          const viewport = page.getViewport({ scale: 2 })
+          if (viewport.width * viewport.height > 24_000_000)
+            throw new Error('Página muito grande para OCR. Reduza a resolução do PDF.')
+          const canvas = document.createElement('canvas')
+          canvas.width = viewport.width
+          canvas.height = viewport.height
+          try {
+            await page.render({ canvasContext: canvas.getContext('2d')!, canvas, viewport }).promise
+            const recognized = await ocrCanvases(
+              [canvas],
+              (fraction) =>
+                onProgress?.(`OCR da página ${i}/${pdf.numPages}: ${Math.round(fraction * 100)}%`),
+              signal,
+            )
+            pages.push({ rows: [], text: recognized, ocr: true })
+          } finally {
+            canvas.width = 0
+            canvas.height = 0
+          }
+        }
+      } finally {
+        page.cleanup()
+      }
+    }
+    return pages
+  } finally {
+    signal?.removeEventListener('abort', abort)
+    await task.destroy()
   }
-  return canvases
 }
 
 export interface PdfTextResult {
@@ -153,35 +179,30 @@ export interface ParsePdfResult {
 export async function parsePdf(
   file: File,
   onProgress?: (msg: string) => void,
+  signal?: AbortSignal,
 ): Promise<ParsePdfResult> {
   onProgress?.('Lendo o PDF…')
-  let pages = await extractPdfPages(file)
-  let text = pages.map((p) => p.text).join('\n')
-
-  let ocrUsed = false
-  const charCount = text.replace(/\s/g, '').length
-
-  // Menos de ~40 caracteres por página indica PDF escaneado.
-  if (pages.length > 0 && charCount / pages.length < 40) {
-    ocrUsed = true
-    onProgress?.('PDF escaneado detectado — iniciando OCR…')
-    const canvases = await renderPdfPages(file, 2)
-    const ocrText = await ocrCanvases(canvases, (p) => {
-      onProgress?.(`Reconhecendo texto… ${Math.round(p * 100)}%`)
-    })
-    text = ocrText
-    pages = [] // OCR não preserva coordenadas: usa o parser genérico
-  }
-
+  const pages = await extractPdfPages(file, onProgress, signal)
+  const text = pages.map((p) => p.text).join('\n')
+  const ocrUsed = pages.some((p) => p.ocr)
   const bank = detectBank(text)
 
   // Fatura de cartão: usa o parser de colunas (datas e valores exatos).
-  const faturaLike = !ocrUsed && looksLikeFatura(pages)
+  const faturaLike = looksLikeFatura(pages)
   if (faturaLike) {
     onProgress?.('Fatura de cartão reconhecida — reconstruindo colunas…')
     const { transactions, pending } = parseFatura(pages)
     if (transactions.length) {
-      return { transactions, bank, ocrUsed, pages: pages.length, pendingInstallments: pending }
+      const scanned = pages
+        .filter((p) => p.ocr)
+        .flatMap((p) => extractFromText(p.text, undefined, { isFatura: true }))
+      return {
+        transactions: [...transactions, ...scanned],
+        bank,
+        ocrUsed,
+        pages: pages.length,
+        pendingInstallments: pending,
+      }
     }
   }
 

@@ -6,8 +6,10 @@ navegador**, sem enviar seus dados para servidor nenhum.
 
 ## Como rodar
 
+Requer Node.js 22.12 ou superior (Node 24 recomendado).
+
 ```bash
-npm install
+npm ci
 npm run dev      # abre em http://localhost:5173
 ```
 
@@ -44,14 +46,19 @@ npm run typecheck
 - **Card "Parcelamentos"**: cada plano parcelado com parcela X/Y, valor da
   parcela, total planejado, quanto já foi pago e quanto falta — além das
   parcelas que já estão na fila para a próxima fatura.
-- **Categorias** com orçamento por categoria e barra de progresso.
+- **Categorias** com edição de orçamento padrão ou do mês selecionado.
 - **Extrato** completo com busca, filtros, ordenação e edição, com etiquetas
   de "Parcela 3/4", "repetida" e moeda original.
 - **Insights**: maior despesa, média diária, dia mais caro, projeção do mês,
   gastos recorrentes, cobranças suspeitas e duplicidades.
 - Marca transações como **essencial**, **supérflua** ou **ignorar**; adiciona
   **tags** e **notas**.
-- Dados salvos em `localStorage` (não precisa reenviar o PDF).
+- Dados salvos como um conjunto atômico no `localStorage`, com aviso de falha e recuperação de conteúdo inválido.
+- Backup JSON: exportar e restaurar na aba Importar. Guarde uma cópia antes de trocar de navegador.
+- CSV: selecione conta (positivo = entrada) ou cartão (positivo = despesa) antes de enviar. Colunas Tipo com C/D têm prioridade.
+- Arquivos: até 30 MB e PDFs com até 100 páginas; OCR por página e cancelamento da leitura.
+- Reimportações com lançamentos já existentes são bloqueadas para evitar duplicar os totais.
+- Parcelamentos são estimativas; use o identificador da compra na edição do Extrato para ajustar agrupamentos semelhantes.
 
 ## Onde personalizar
 
@@ -84,5 +91,27 @@ src/
 
 ## Privacidade
 
-Nenhum dado bancário sai do navegador. O único download externo é o modelo de
-idioma do OCR (português), usado apenas quando o PDF é escaneado.
+Nenhum dado bancário sai do navegador. Há solicitações externas para as fontes do Google e para o worker, o motor e o modelo de idioma do OCR. O conteúdo dos extratos é processado no navegador; OCR pode precisar de internet na primeira execução.
+
+## Verificações e publicação
+
+Execute `npm run check` para tipos, testes e build. O workflow em .github executa essas verificações automaticamente. `npm run format` formata o código e `npm run format:check` confere a formatação.
+
+Publique somente a pasta `dist/`. O projeto inclui fallback de rotas para Netlify/Cloudflare Pages (`public/_redirects`) e Vercel (`vercel.json`). Em outros servidores, encaminhe rotas como /extrato para index.html, mantendo arquivos estáticos. Não exponha o servidor de desenvolvimento na internet.
+
+Para rollback, mantenha o artefato dist anterior e um backup JSON dos dados antes de atualizar. Se houver falha, republique o artefato anterior; não apague o localStorage. A versão atual lê as chaves antigas e preserva os dados legados.
+
+## Teste no navegador
+
+Com o servidor local na porta 5174 e o Playwright CLI instalado:
+
+```powershell
+node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5174 --strictPort
+# Em outro terminal:
+playwright-cli -s=caderneta open http://127.0.0.1:5174
+playwright-cli -s=caderneta run-code --filename=scripts/browser-smoke.js
+```
+
+Esse roteiro usa um contexto isolado, dados sintéticos e fixtures PDF próprias. Testa CSV, edição, recarga, duplicação, backup, orçamento, PDF textual, OCR e falha de quota. O OCR depende de downloads externos. Não modifica os dados do perfil principal do navegador.
+
+A revisão de importação é preservada na sessão ao trocar de página ou recarregar. Abrir Categorias, Painel ou Extrato salva automaticamente uma revisão válida. Se houver erro de validação ou de salvamento, a aplicação volta à revisão com os dados preservados. Também há o botão “Salvar e ver categorias” acima da tabela.

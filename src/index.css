@@ -61,7 +61,9 @@ body {
       transparent 73px
     ),
     linear-gradient(to bottom, var(--rule) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 32px;
+  background-size:
+    100% 100%,
+    100% 32px;
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -271,7 +273,9 @@ button {
   border: 1px solid rgba(30, 42, 74, 0.06);
   box-shadow: var(--shadow-sm);
   padding: 24px;
-  transition: box-shadow 200ms ease, transform 200ms ease;
+  transition:
+    box-shadow 200ms ease,
+    transform 200ms ease;
 }
 
 .card:hover {
@@ -995,7 +999,9 @@ button {
   border-radius: 12px;
   background: #fffdf7;
   overflow: hidden;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .merchant-card:hover {
@@ -1556,7 +1562,9 @@ button {
   border-radius: 10px;
   padding: 10px 12px;
   outline: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
   width: 100%;
 }
 
@@ -2260,4 +2268,43 @@ textarea.input {
     border: 1px solid #ddd;
     break-inside: avoid;
   }
+}
+
+.merchant-edit {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+.invalid-row {
+  background: #fff0ec;
+}
+:focus-visible {
+  outline: 3px solid var(--coral);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.import-review-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0;
+}
+.import-review-banner p {
+  margin: 6px 0 0;
+  max-width: 650px;
+  font-size: 0.9rem;
 }

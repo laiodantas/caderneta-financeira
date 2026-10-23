@@ -6,7 +6,7 @@ import type { RawTransaction } from '../../types'
 import { parseMoneyToken } from './text'
 
 function grab(block: string, tag: string): string | null {
-  const m = block.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'))
+  const m = block.match(new RegExp(`<${tag}>([^<\\r\\n]*)`, 'i'))
   return m ? m[1].trim() : null
 }
 
@@ -14,7 +14,9 @@ function parseOFXDate(raw: string): string {
   // OFX: "20261015120000[-3:BRT]" → "2026-10-15"
   const m = raw.match(/(\d{4})(\d{2})(\d{2})/)
   if (!m) return ''
-  return `${m[1]}-${m[2]}-${m[3]}`
+  const iso = `${m[1]}-${m[2]}-${m[3]}`
+  const d = new Date(`${iso}T12:00:00Z`)
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : ''
 }
 
 export function parseOFX(text: string): RawTransaction[] {
@@ -24,10 +26,11 @@ export function parseOFX(text: string): RawTransaction[] {
   for (const match of blocks) {
     const block = match[1]
     const amountRaw = grab(block, 'TRNAMT')
-    if (!amountRaw) continue
+    if (!amountRaw) throw new Error('Lançamento OFX sem valor. Revise o arquivo antes de importar.')
 
     const parsed = parseMoneyToken(amountRaw)
-    if (!parsed || parsed.value === 0) continue
+    if (!parsed) throw new Error('Lançamento OFX com valor inválido.')
+    if (parsed.value === 0) continue
 
     const date = parseOFXDate(grab(block, 'DTPOSTED') ?? '')
     const description = grab(block, 'MEMO') ?? grab(block, 'NAME') ?? ''

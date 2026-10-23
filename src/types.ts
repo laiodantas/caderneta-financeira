@@ -42,6 +42,8 @@ export interface Transaction {
   note?: string
   /** Preenchido quando a compra é uma parcela de um plano. */
   installment?: InstallmentInfo
+  /** Identificador manual opcional para separar compras parceladas semelhantes. */
+  installmentPlanId?: string
   /** Valor na moeda original, quando o banco informou conversão (ex.: 17.14 USD). */
   originalAmount?: number
   /** Moeda original do lançamento (ex.: "USD"). */

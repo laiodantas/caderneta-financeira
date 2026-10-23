@@ -26,11 +26,7 @@ function tx(over: Partial<Transaction>): Transaction {
 
 describe('duplicates', () => {
   it('agrupa cobranças com mesmo estabelecimento, data e valor', () => {
-    const groups = duplicates([
-      tx({ id: 'a' }),
-      tx({ id: 'b' }),
-      tx({ id: 'c', amount: 50 }),
-    ])
+    const groups = duplicates([tx({ id: 'a' }), tx({ id: 'b' }), tx({ id: 'c', amount: 50 })])
 
     expect(groups).toHaveLength(1)
     expect(groups[0].map((t) => t.id)).toEqual(['a', 'b'])
@@ -46,10 +42,7 @@ describe('duplicates', () => {
   })
 
   it('não marca valores diferentes no mesmo dia', () => {
-    const groups = duplicates([
-      tx({ id: 'a', amount: 10 }),
-      tx({ id: 'b', amount: 20 }),
-    ])
+    const groups = duplicates([tx({ id: 'a', amount: 10 }), tx({ id: 'b', amount: 20 })])
 
     expect(groups).toHaveLength(0)
   })

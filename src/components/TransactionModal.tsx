@@ -17,14 +17,9 @@ const STATUS_OPTIONS: { value: TransactionStatus | ''; label: string }[] = [
   { value: 'ignorar', label: 'Ignorar (não conta)' },
 ]
 
-export function TransactionModal({
-  tx,
-  onClose,
-}: {
-  tx: Transaction
-  onClose: () => void
-}) {
+export function TransactionModal({ tx, onClose }: { tx: Transaction; onClose: () => void }) {
   const { updateTransaction, addRule } = useFinance()
+  const [planId, setPlanId] = useState(tx.installmentPlanId ?? '')
   const [date, setDate] = useState(tx.date)
   const [amountStr, setAmountStr] = useState(formatNumber(tx.amount))
   const [category, setCategory] = useState(tx.category)
@@ -35,6 +30,7 @@ export function TransactionModal({
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
+    setPlanId(tx.installmentPlanId ?? '')
     setDate(tx.date)
     setAmountStr(formatNumber(tx.amount))
     setCategory(tx.category)
@@ -65,6 +61,7 @@ export function TransactionModal({
     const changedCategory = category !== tx.category
     updateTransaction(tx.id, {
       date,
+      installmentPlanId: planId.trim() || undefined,
       amount,
       category,
       // Escolha manual de categoria fica protegida contra a recategorização.
@@ -88,7 +85,9 @@ export function TransactionModal({
         <span className="muted">{tx.description}</span>
         <div className="tx-modal-meta">
           <span>{formatDateBR(tx.date)}</span>
-          <span className={`tx-type tx-${tx.type}`}>{tx.type === 'entrada' ? 'Entrada' : 'Saída'}</span>
+          <span className={`tx-type tx-${tx.type}`}>
+            {tx.type === 'entrada' ? 'Entrada' : 'Saída'}
+          </span>
           <span className="tx-amount">{formatBRL(tx.amount)}</span>
         </div>
       </div>
@@ -126,9 +125,25 @@ export function TransactionModal({
         </select>
       </label>
 
+      {tx.installment && (
+        <label className="field">
+          <span className="field-label">Identificador da compra parcelada (opcional)</span>
+          <input
+            className="input"
+            value={planId}
+            onChange={(e) => setPlanId(e.target.value)}
+            placeholder="Ex.: celular-2026"
+          />
+          <small>Use o mesmo identificador nas parcelas de uma compra para agrupá-las.</small>
+        </label>
+      )}
       <label className="field">
         <span className="field-label">Classificação</span>
-        <select className="input" value={status} onChange={(e) => setStatus(e.target.value as TransactionStatus | '')}>
+        <select
+          className="input"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as TransactionStatus | '')}
+        >
           {STATUS_OPTIONS.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
@@ -139,12 +154,23 @@ export function TransactionModal({
 
       <label className="field">
         <span className="field-label">Tags (separadas por vírgula)</span>
-        <input className="input" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="ex.: trabalho, viagem" />
+        <input
+          className="input"
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="ex.: trabalho, viagem"
+        />
       </label>
 
       <label className="field">
         <span className="field-label">Nota (anotação à margem)</span>
-        <textarea className="input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: jantar de aniversário" />
+        <textarea
+          className="input"
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Ex.: jantar de aniversário"
+        />
       </label>
 
       <label className="check">

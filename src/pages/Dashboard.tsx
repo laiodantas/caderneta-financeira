@@ -5,8 +5,28 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useFinance } from '../context/FinanceContext'
-import { activeTransactions, totalsOf, groupByCategory, groupByMerchant, groupByMonth, balanceEvolution } from '../lib/aggregate'
-import { biggestExpense, avgDailySpend, mostExpensiveWeekday, endOfMonthProjection, compareMonths, recurringExpenses, anomalies, duplicates, smartSummary, repeatedCharges, installmentPlans, topCharges } from '../lib/insights'
+import {
+  activeTransactions,
+  totalsOf,
+  groupByCategory,
+  groupByMerchant,
+  groupByMonth,
+  balanceEvolution,
+} from '../lib/aggregate'
+import {
+  biggestExpense,
+  avgDailySpend,
+  mostExpensiveWeekday,
+  endOfMonthProjection,
+  compareMonths,
+  recurringExpenses,
+  anomalies,
+  duplicates,
+  smartSummary,
+  repeatedCharges,
+  installmentPlans,
+  topCharges,
+} from '../lib/insights'
 import { formatBRL, periodLabel, formatDateShort } from '../lib/format'
 import { currentPeriod, projectionForPeriod, totalBudgetForPeriods } from '../lib/budget'
 import { categoryName, categoryColor } from '../config/categories'
@@ -25,7 +45,7 @@ export function Dashboard() {
     [transactions],
   )
   const [period, setPeriod] = useState<string>('__latest__')
-  const effectivePeriod = period === '__latest__' ? periods[0] ?? 'all' : period
+  const effectivePeriod = period === '__latest__' ? (periods[0] ?? 'all') : period
 
   const active = useMemo(() => activeTransactions(transactions), [transactions])
   const filtered = useMemo(
@@ -57,9 +77,7 @@ export function Dashboard() {
   // Compara o mês selecionado com o anterior (não sempre os dois últimos do banco).
   const comparison = useMemo(
     () =>
-      isAll
-        ? null
-        : compareMonths(active.filter((t) => t.date.slice(0, 7) <= effectivePeriod)),
+      isAll ? null : compareMonths(active.filter((t) => t.date.slice(0, 7) <= effectivePeriod)),
     [active, effectivePeriod, isAll],
   )
   const recurring = useMemo(() => recurringExpenses(active), [active])
@@ -72,8 +90,39 @@ export function Dashboard() {
   const plans = useMemo(() => installmentPlans(active), [active])
   const top5 = useMemo(() => topCharges(filtered, 5), [filtered])
   const pending = useMemo(
-    () => statements.flatMap((s) => s.pendingInstallments ?? []),
-    [statements],
+    () =>
+      statements
+        .filter(
+          (s) =>
+            s.period ===
+            [...statements]
+              .map((item) => item.period)
+              .sort()
+              .slice(-1)[0],
+        )
+        .flatMap((s) => s.pendingInstallments ?? [])
+        .filter(
+          (p, i, all) =>
+            all.findIndex(
+              (other) =>
+                other.description === p.description &&
+                other.current === p.current &&
+                other.total === p.total &&
+                other.amount === p.amount,
+            ) === i,
+        )
+        .filter(
+          (p) =>
+            !active.some(
+              (t) =>
+                t.installment &&
+                t.installment.current >= p.current &&
+                t.installment.total === p.total &&
+                t.amount === p.amount &&
+                (t.merchant === p.description || t.description === p.description),
+            ),
+        ),
+    [statements, active],
   )
 
   const totalBudget = useMemo(
@@ -85,8 +134,7 @@ export function Dashboard() {
     () => projectionForPeriod(totals.saidas, isAll ? currentPeriod() : effectivePeriod),
     [totals.saidas, isAll, effectivePeriod],
   )
-  const willOverspend =
-    isCurrentMonth && totalBudget > 0 && projection.projection > totalBudget
+  const willOverspend = isCurrentMonth && totalBudget > 0 && projection.projection > totalBudget
 
   // ---- Estado vazio --------------------------------------------------------
   if (!transactions.length) {
@@ -97,9 +145,8 @@ export function Dashboard() {
           <div className="empty-hero-text">
             <h1 className="empty-hero-title">Jogue seu extrato aqui</h1>
             <p className="empty-hero-desc">
-              Arraste um PDF, CSV ou OFX do seu banco e a Caderneta organiza tudo —
-              categorias, gráficos e insights — direto no navegador, sem enviar
-              seus dados para lugar nenhum.
+              Arraste um PDF, CSV ou OFX do seu banco e a Caderneta organiza tudo — categorias,
+              gráficos e insights — direto no navegador, sem enviar seus dados para lugar nenhum.
             </p>
             <div className="empty-hero-actions">
               <Link to="/importar" className="btn btn-primary">
@@ -177,7 +224,11 @@ export function Dashboard() {
 
       {/* Gráficos: rosca + barras */}
       <div className="grid-2">
-        <ChartCard title="Distribuição por categoria" subtitle="para onde foi seu dinheiro" height="auto">
+        <ChartCard
+          title="Distribuição por categoria"
+          subtitle="para onde foi seu dinheiro"
+          height="auto"
+        >
           <DonutChart
             data={categories.map((c) => ({ name: c.name, value: c.total, color: c.color }))}
           />
@@ -209,7 +260,8 @@ export function Dashboard() {
           )}
           {suspicious.length > 0 && (
             <span className="alert-item">
-              <Tag tone="coral">Atenção</Tag> {suspicious.length} cobrança{suspicious.length > 1 ? 's' : ''} acima do normal
+              <Tag tone="coral">Atenção</Tag> {suspicious.length} cobrança
+              {suspicious.length > 1 ? 's' : ''} acima do normal
             </span>
           )}
           {dups.length > 0 && (
@@ -263,11 +315,23 @@ export function Dashboard() {
             </div>
           )}
           <div className="insight-grid">
-            <InsightCard label="Maior despesa" value={biggest ? formatBRL(biggest.amount) : '—'} detail={biggest?.merchant} />
-            <InsightCard label="Média por dia" value={formatBRL(avgDaily)} />
-            <InsightCard label="Dia mais caro" value={weekday.weekday} detail={formatBRL(weekday.total)} />
+            <InsightCard
+              label="Maior despesa"
+              value={biggest ? formatBRL(biggest.amount) : '—'}
+              detail={biggest?.merchant}
+            />
+            <InsightCard label="Média por dia com gasto" value={formatBRL(avgDaily)} />
+            <InsightCard
+              label="Dia mais caro"
+              value={weekday.weekday}
+              detail={formatBRL(weekday.total)}
+            />
             {proj && (
-              <InsightCard label="Projeção fim do mês" value={formatBRL(proj.projection)} detail={`${proj.daysLeft} dias restantes`} />
+              <InsightCard
+                label="Projeção fim do mês"
+                value={formatBRL(proj.projection)}
+                detail={`${proj.daysLeft} dias restantes`}
+              />
             )}
             {totalBudget > 0 && (
               <InsightCard
@@ -330,7 +394,8 @@ export function Dashboard() {
         <div className="card section-gap">
           <SectionTitle>Parcelamentos</SectionTitle>
           <p className="muted installment-note">
-            Compras parceladas de todos os períodos importados
+            Agrupamento estimado das compras parceladas de todos os períodos. Ajuste o identificador
+            da compra no Extrato se precisar separar ou unir planos.
           </p>
           {plans.length === 0 && pending.length === 0 && (
             <p className="rank-empty">Nenhuma compra parcelada por aqui.</p>
@@ -347,13 +412,16 @@ export function Dashboard() {
                     <span className="installment-total">{formatBRL(p.planTotal)}</span>
                   </div>
                   <div className="installment-meta">
-                    {formatBRL(p.installmentAmount)} por parcela · pago {formatBRL(p.paid)} · falta{' '}
-                    {formatBRL(p.remaining)}
+                    {formatBRL(p.installmentAmount)} por parcela · observado {formatBRL(p.paid)} ·
+                    próximas parcelas estimadas {formatBRL(p.remaining)}
                   </div>
                   <div className="budget-bar">
                     <div
                       className="budget-fill"
-                      style={{ width: `${Math.round(p.progress)}%`, background: categoryColor(p.categoryId) }}
+                      style={{
+                        width: `${Math.round(p.progress)}%`,
+                        background: categoryColor(p.categoryId),
+                      }}
                     />
                   </div>
                 </li>
@@ -363,7 +431,7 @@ export function Dashboard() {
 
           {pending.length > 0 && (
             <>
-              <div className="installment-subtitle">Próximas parcelas a cobrar</div>
+              <div className="installment-subtitle">Previsão do último extrato</div>
               <ul className="installment-list">
                 {pending.map((p, i) => (
                   <li key={`${p.description}-${p.current}-${i}`} className="installment-row">

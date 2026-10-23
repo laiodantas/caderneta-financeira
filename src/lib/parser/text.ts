@@ -13,27 +13,69 @@ import type { RawTransaction } from '../../types'
 // Cuidado: termos genéricos como "crédito" foram deixados de fora porque
 // aparecem em cobranças de despesa ("IOF CRÉDITO PARCELADO").
 const ENTRADA_KEYWORDS = [
-  'pix recebido', 'pix recebida', 'recebimento pix', 'pix creditado',
-  'deposito', 'depósito', 'salario', 'salário', 'ted recebido', 'doc recebido',
-  'estorno', 'rendimento', 'cashback', 'transferencia recebida',
-  'transferência recebida', 'pagamento recebido', 'reembolso', 'dividendo',
-  'resgate', 'aplicacao', 'aplicação', 'pix entrando', 'pix entrada',
-  'entrada creditada', 'credito em conta',
+  'pix recebido',
+  'pix recebida',
+  'recebimento pix',
+  'pix creditado',
+  'deposito',
+  'depósito',
+  'salario',
+  'salário',
+  'ted recebido',
+  'doc recebido',
+  'estorno',
+  'rendimento',
+  'cashback',
+  'transferencia recebida',
+  'transferência recebida',
+  'pagamento recebido',
+  'reembolso',
+  'dividendo',
+  'resgate',
+  'aplicacao',
+  'aplicação',
+  'pix entrando',
+  'pix entrada',
+  'entrada creditada',
+  'credito em conta',
 ]
 
 // Linhas que claramente NÃO são transações.
 const NOISE = [
-  /^p[áa]gina\b/i, /^data\b/i, /^descri[çc][ãa]o\b/i, /^hist[óo]rico\b/i,
-  /^valor\b/i, /^saldo\b/i, /^extrato\b/i, /^per[íi]odo\b/i, /^total\b/i,
-  /^autentica[çc][ãa]o\b/i, /^conta\b/i, /^ag[êe]ncia\b/i, /^lan[çc]amentos?\b/i,
-  /^\d+\s+de\s+\d+\s+p[áa]ginas?/i, /^[^a-z0-9]*$/,
+  /^p[áa]gina\b/i,
+  /^data\b/i,
+  /^descri[çc][ãa]o\b/i,
+  /^hist[óo]rico\b/i,
+  /^valor\b/i,
+  /^saldo\b/i,
+  /^extrato\b/i,
+  /^per[íi]odo\b/i,
+  /^total\b/i,
+  /^autentica[çc][ãa]o\b/i,
+  /^conta\b/i,
+  /^ag[êe]ncia\b/i,
+  /^lan[çc]amentos?\b/i,
+  /^\d+\s+de\s+\d+\s+p[áa]ginas?/i,
+  /^[^a-z0-9]*$/,
   // Fatura de cartão: vencimento, limites, parcelamento e encargos.
-  /^vencimento\b/i, /^limite\b/i, /^fatura anterior\b/i, /^resumo\b/i,
-  /^parcelamento\b/i, /^encargos?\b/i, /^pagamento m[íi]nimo/i,
-  /^iof (di[áa]rio|adicional|internacional)/i, /^multa/i, /^juros de mora/i,
-  /^saldo (total|de|em aberto)/i, /^nosso n[úu]mero/i, /^n[ºo°]? ?documento/i,
-  /^b[êe]nefici[áa]rio/i, /^local de pagamento/i, /^pagador\b/i,
-  /^fale com a gente/i, /^encargos financeiros/i,
+  /^vencimento\b/i,
+  /^limite\b/i,
+  /^fatura anterior\b/i,
+  /^resumo\b/i,
+  /^parcelamento\b/i,
+  /^encargos?\b/i,
+  /^pagamento m[íi]nimo/i,
+  /^iof (di[áa]rio|adicional|internacional)/i,
+  /^multa/i,
+  /^juros de mora/i,
+  /^saldo (total|de|em aberto)/i,
+  /^nosso n[úu]mero/i,
+  /^n[ºo°]? ?documento/i,
+  /^b[êe]nefici[áa]rio/i,
+  /^local de pagamento/i,
+  /^pagador\b/i,
+  /^fale com a gente/i,
+  /^encargos financeiros/i,
   // Opções de parcelamento da fatura: "1 + 2 de R$ 709,49".
   /^\d+\s*\+\s*\d+\s+de R\$/i,
   // Linha de código de barras do boleto.
@@ -41,8 +83,18 @@ const NOISE = [
 ]
 
 const MONTHS: Record<string, number> = {
-  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
-  jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
+  jan: 1,
+  fev: 2,
+  mar: 3,
+  abr: 4,
+  mai: 5,
+  jun: 6,
+  jul: 7,
+  ago: 8,
+  set: 9,
+  out: 10,
+  nov: 11,
+  dez: 12,
 }
 
 // Nomes de mês completos ou abreviados, exigindo fim de palavra para não
@@ -116,7 +168,7 @@ export function parseMoneyToken(token: string): { value: number; negative: boole
     value = parseFloat(s)
   }
 
-  if (value == null || Number.isNaN(value)) return null
+  if (value == null || !Number.isFinite(value)) return null
   return { value: Math.abs(value), negative }
 }
 
@@ -126,7 +178,8 @@ function findMoneyTokens(line: string): MoneyMatch[] {
   // Padrão com R$ opcional, sinal opcional, milhar/decimal.
   // Números soltos de 4+ dígitos (anos, códigos, CPF) NÃO entram: antes eles
   // viravam valores como R$ 20,26 a partir de "2026".
-  const re = /(?:[-+]\s*)?(?:R\$\s*)?[-+]?\s*(?:\(?\s*\d{1,3}(?:[.,]\d{3})*[.,]\d{2}\s*\)?|\d+[.,]\d{2}\b)(?:\s*[DC]\b)?(?!(?:[\d/\-]|[.,]\d))/gi
+  const re =
+    /(?:[-+]\s*)?(?:R\$\s*)?[-+]?\s*(?:\(?\s*\d{1,3}(?:[.,]\d{3})*[.,]\d{2}\s*\)?|\d+[.,]\d{2}\b)(?:\s*[DC]\b)?(?!(?:[\d/\-]|[.,]\d))/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(line)) !== null) {
     const parsed = parseMoneyToken(m[0])
@@ -216,6 +269,7 @@ export function extractFromText(
   fallbackDate?: string,
   options: ExtractOptions = {},
 ): RawTransaction[] {
+  const hasBalanceColumn = /(?:valor|movimenta)[^\n]*saldo/i.test(text)
   const lines = text.replace(/\r/g, '').split('\n')
   const result: RawTransaction[] = []
   const fallbackYear = fallbackDate
@@ -236,7 +290,17 @@ export function extractFromText(
     if (!tokens.length) continue
 
     // O valor da transação é o ÚLTIMO valor monetário da linha.
-    const money = tokens[tokens.length - 1]
+    // Em linhas com duas colunas monetárias, a última é o saldo.
+    if (
+      tokens.length > 1 &&
+      !hasBalanceColumn &&
+      !tokens.slice(0, -1).some((token) => token.negative)
+    ) {
+      throw new Error(
+        'Linha com vários valores sem coluna de saldo identificada. Use CSV/OFX ou um extrato com cabeçalho Valor e Saldo.',
+      )
+    }
+    const money = tokens.length > 1 ? tokens[tokens.length - 2] : tokens[0]
     const value = money.value
 
     // Descrição = trecho antes do valor.
@@ -279,7 +343,8 @@ export function extractFromText(
     const isEntradaKeyword = ENTRADA_KEYWORDS.some((k) => desc.toLowerCase().includes(k))
     let type: 'entrada' | 'saida'
     if (money.negative) type = options.isFatura ? 'entrada' : 'saida'
-    else if (/C\b/i.test(money.raw)) type = 'entrada'
+    else if (/C\b/i.test(money.raw) || (!options.isFatura && /^\s*\+/.test(money.raw)))
+      type = 'entrada'
     else type = isEntradaKeyword ? 'entrada' : 'saida'
 
     result.push({

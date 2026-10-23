@@ -17,6 +17,7 @@ import {
 import { formatBRL, formatDateBR, periodLabel } from '../lib/format'
 import { EmptyState } from '../components/ui'
 import { NotebookIllustration } from '../components/Illustrations'
+import { BudgetEditor } from '../components/BudgetEditor'
 import { UncategorizedQueue } from '../components/UncategorizedQueue'
 
 export function Categorias() {
@@ -30,7 +31,7 @@ export function Categorias() {
     () => [...new Set(active.map((t) => t.date.slice(0, 7)))].sort().reverse(),
     [active],
   )
-  const effectivePeriod = period === '__latest__' ? periods[0] ?? 'all' : period
+  const effectivePeriod = period === '__latest__' ? (periods[0] ?? 'all') : period
   const isAll = effectivePeriod === 'all'
   const scopeLabel = isAll ? 'todos os períodos' : periodLabel(effectivePeriod)
 
@@ -79,8 +80,8 @@ export function Categorias() {
         <div>
           <h1 className="page-title">Categorias</h1>
           <p className="page-subtitle">
-            {groups.length} categoria{groups.length === 1 ? '' : 's'} · saídas de{' '}
-            {scopeLabel}: {formatBRL(totals.saidas)}
+            {groups.length} categoria{groups.length === 1 ? '' : 's'} · saídas de {scopeLabel}:{' '}
+            {formatBRL(totals.saidas)}
           </p>
         </div>
         <div className="page-top-actions">
@@ -107,6 +108,7 @@ export function Categorias() {
 
       {notice && <p className="muted page-notice">{notice}</p>}
 
+      <BudgetEditor period={isAll ? undefined : effectivePeriod} />
       <UncategorizedQueue transactions={scoped} scopeLabel={scopeLabel} />
 
       <div className="grid-2 categories-grid">
@@ -172,9 +174,7 @@ function CategoryCard({
           className="merchant-more"
           onClick={() => setShowAllMerchants((v) => !v)}
         >
-          {showAllMerchants
-            ? 'Mostrar menos'
-            : `Ver todos os ${merchants.length} estabelecimentos`}
+          {showAllMerchants ? 'Mostrar menos' : `Ver todos os ${merchants.length} estabelecimentos`}
         </button>
       )}
 

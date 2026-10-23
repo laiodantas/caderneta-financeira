@@ -10,22 +10,29 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test && npm run build",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src"
   },
   "dependencies": {
-    "pdfjs-dist": "3.11.174",
+    "pdfjs-dist": "^6.4.299",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-router-dom": "6.26.2",
-    "recharts": "2.12.7",
+    "react-router-dom": "^7.18.4",
+    "recharts": "^3.10.1",
     "tesseract.js": "5.1.1"
   },
   "devDependencies": {
     "@types/react": "18.3.5",
     "@types/react-dom": "18.3.0",
-    "@vitejs/plugin-react": "4.3.1",
+    "@vitejs/plugin-react": "^6.1.2",
+    "prettier": "^3.8.3",
     "typescript": "5.5.4",
-    "vite": "5.4.8",
-    "vitest": "^2.1.9"
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
